@@ -2,6 +2,7 @@ import { ASSET_LIBRARY, DEFAULT_ASSETS } from './assets.js';
 import { createBlock, createPageBody } from './templates.js';
 import { PAGE_SIZES, downloadPagesAsPdf } from './pdf-export.js';
 import { readUserAssets, writeUserAssets, clearUserAssets, downloadJson, fileToDataUrl, saveAutosave, readAutosave } from './storage.js';
+import { maintainReadableLayout, fitAllHeadlines } from './layout-flow.js';
 
 const els = {
   documentContainer: document.getElementById('document-container'),
@@ -43,6 +44,7 @@ let activeGrid = null;
 let imageTarget = null;
 let draggedBlock = null;
 let autosaveTimer = null;
+let layoutTimer = null;
 
 init();
 
@@ -57,7 +59,9 @@ function init() {
   bindEvents();
   renderAssetLibrary();
   updatePageSize(els.pageSizeSelect.value);
+  queueLayoutMaintenance(0);
 }
+
 
 function bindEvents() {
   els.addTemplatePageBtn.addEventListener('click', () => createPage(els.templateSelect.value));
@@ -66,10 +70,12 @@ function bindEvents() {
     if (!activePage) return;
     activePage.dataset.theme = els.themeSelect.value;
     applyThemeMasthead(activePage, els.themeSelect.value);
+    queueLayoutMaintenance();
     queueAutosave();
   });
   els.pageSizeSelect.addEventListener('change', () => {
     updatePageSize(els.pageSizeSelect.value);
+    queueLayoutMaintenance();
     queueAutosave();
   });
 
@@ -78,7 +84,7 @@ function bindEvents() {
     const page = event.target.closest('.sheet-page');
     if (page) setActivePage(page);
   });
-  els.documentContainer.addEventListener('input', queueAutosave);
+  els.documentContainer.addEventListener('input', () => { fitAllHeadlines(els.documentContainer); queueLayoutMaintenance(); queueAutosave(); });
   els.documentContainer.addEventListener('paste', handlePlainTextPaste);
 
   els.assetLibraryBtn.addEventListener('click', () => openAssetModal());
@@ -126,6 +132,7 @@ function createPage(templateName) {
   els.documentContainer.appendChild(page);
   setActivePage(page);
   updatePageNumbers();
+  queueLayoutMaintenance(0);
   queueAutosave();
   return page;
 }
@@ -218,6 +225,7 @@ function addSelectedBlock() {
   hydratePage(activePage);
   const added = target.querySelector('.block:last-of-type');
   if (added) setActiveBlock(added);
+  queueLayoutMaintenance();
   queueAutosave();
 }
 
@@ -253,6 +261,7 @@ function applySelectedLayout() {
   const target = activeGrid && activePage.contains(activeGrid) ? activeGrid : activePage.querySelector('.sheet-body');
   setLayoutClass(target, els.layoutSelect.value);
   setActiveGrid(target);
+  queueLayoutMaintenance();
   queueAutosave();
 }
 
@@ -265,6 +274,7 @@ function addLayoutSection() {
   hydratePage(activePage);
   setActiveGrid(section);
   setActiveBlock(section.querySelector('.block'));
+  queueLayoutMaintenance();
   queueAutosave();
 }
 
@@ -272,6 +282,7 @@ function applySelectedSpan() {
   if (!activeBlock) return;
   activeBlock.classList.remove('span-1', 'span-2', 'span-all', 'span-compact');
   activeBlock.classList.add(els.spanSelect.value);
+  queueLayoutMaintenance();
   queueAutosave();
 }
 
@@ -282,6 +293,7 @@ function moveActiveBlock(direction) {
   if (direction < 0) activeBlock.parentElement.insertBefore(activeBlock, sibling);
   else activeBlock.parentElement.insertBefore(sibling, activeBlock);
   activeBlock.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  queueLayoutMaintenance();
   queueAutosave();
 }
 
@@ -292,6 +304,7 @@ function duplicateActiveBlock() {
   activeBlock.after(clone);
   hydratePage(activePage || clone.closest('.sheet-page'));
   setActiveBlock(clone);
+  queueLayoutMaintenance();
   queueAutosave();
 }
 
@@ -317,6 +330,7 @@ function addImageSlotToActiveBlock() {
   activeBlock.classList.add('image-pos-top');
   imageTarget = frame;
   openAssetModal();
+  queueLayoutMaintenance();
   queueAutosave();
 }
 
@@ -332,6 +346,7 @@ function applyImageOptions() {
     targetBlock.classList.remove('image-pos-top', 'image-pos-left', 'image-pos-right', 'image-pos-hero');
     targetBlock.classList.add(els.imagePositionSelect.value);
   }
+  queueLayoutMaintenance();
   queueAutosave();
 }
 
@@ -424,6 +439,7 @@ function handleDrop(event) {
   else container.appendChild(draggedBlock);
   setActiveGrid(container);
   setActiveBlock(draggedBlock);
+  queueLayoutMaintenance();
   queueAutosave();
 }
 
@@ -538,6 +554,7 @@ function selectAsset(src, name) {
   const empty = imageTarget.querySelector('.empty-label');
   if (empty) empty.style.display = 'none';
   closeAssetModal();
+  queueLayoutMaintenance();
   queueAutosave();
 }
 
@@ -599,6 +616,7 @@ function loadProjectData(data, { silent = false } = {}) {
   const firstPage = els.documentContainer.querySelector('.sheet-page');
   if (firstPage) setActivePage(firstPage);
   updatePageNumbers();
+  queueLayoutMaintenance(0);
   queueAutosave();
 }
 
@@ -618,12 +636,21 @@ function sanitizeProjectHtml(html) {
   return doc.querySelector('main').innerHTML;
 }
 
+function queueLayoutMaintenance(delay = 700) {
+  clearTimeout(layoutTimer);
+  layoutTimer = setTimeout(() => maintainReadableLayout(els.documentContainer), delay);
+}
+
 function queueAutosave() {
   clearTimeout(autosaveTimer);
-  autosaveTimer = setTimeout(() => saveAutosave(buildProjectData()), 450);
+  autosaveTimer = setTimeout(() => {
+    maintainReadableLayout(els.documentContainer);
+    saveAutosave(buildProjectData());
+  }, 650);
 }
 
 async function exportPdf() {
+  maintainReadableLayout(els.documentContainer);
   const pages = Array.from(els.documentContainer.querySelectorAll('.sheet-page'));
   if (!pages.length) return;
   const oldText = els.downloadPdfBtn.textContent;

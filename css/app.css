@@ -516,3 +516,86 @@ label { color: var(--app-muted); font-size: .72rem; text-transform: uppercase; l
   .app-shell { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .toolbar-brand, .toolbar-actions { grid-column: 1 / -1; justify-content: start; }
 }
+
+/* Layout safety and automatic newspaper flow refinements */
+.sheet-grid,
+.sheet-grid > *,
+.sheet-body,
+.block,
+.article,
+.article > *,
+.gm-box,
+.warning-box,
+.briefs-box,
+.qa-box,
+.timeline-box,
+.stat-box,
+.links-box {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.sheet-grid { align-items: start; }
+.sheet-grid > .block,
+.sheet-grid > .sheet-grid { overflow: visible; }
+
+.editable,
+.editable-block,
+.article-body,
+.article h1,
+.article h2,
+.article h3,
+.headline,
+.block-title,
+.mission-cover h1,
+.hero-overlay h2 {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: normal;
+  hyphens: auto;
+}
+
+.article h2,
+.headline,
+.block-title { font-size: var(--fit-font-size, 25px); }
+.lead-article h1 { font-size: var(--fit-font-size, 52px); }
+.mission-cover h1 { font-size: var(--fit-font-size, 64px); }
+.hero-overlay h2 { font-size: var(--fit-font-size, 32px); }
+
+.continuation-heading {
+  color: var(--theme-primary-dark);
+  border-top: 2px solid var(--theme-primary);
+  padding-top: 4px;
+}
+
+.block[data-auto-continuation="true"]::before {
+  content: "continued";
+  display: inline-block;
+  margin: 0 0 4px;
+  padding: 2px 5px;
+  background: var(--theme-primary);
+  color: #fff;
+  font: 800 9px/1 Arial, Helvetica, sans-serif;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+.layout-overflow-warning::after {
+  content: "Page overflow: reduce an unsplittable block or image.";
+  position: absolute;
+  right: 12px;
+  bottom: 56px;
+  z-index: 9;
+  max-width: 220px;
+  padding: 6px 8px;
+  background: #ffcc00;
+  color: #111;
+  border: 2px solid #111;
+  font: 800 11px/1.2 Arial, Helvetica, sans-serif;
+  text-transform: uppercase;
+  box-shadow: 0 4px 14px rgba(0,0,0,.25);
+}
+
+@media print {
+  .layout-overflow-warning::after { display: none; }
+}
