@@ -1,0 +1,72 @@
+.sheet-page[data-theme="nct"] {
+  --theme-primary: #e31b23;
+  --theme-primary-dark: #aa1118;
+  --theme-secondary: #1c1c22;
+  --theme-soft: #d7d7d7;
+  --theme-pale: #f5d8d6;
+  --theme-link: #1f65b7;
+}
+.sheet-page[data-theme="augmented-optic"] {
+  --theme-primary: #9b58d1;
+  --theme-primary-dark: #69379a;
+  --theme-secondary: #21162f;
+  --theme-soft: #e5d9ef;
+  --theme-pale: #efe3f7;
+  --theme-link: #2659ba;
+}
+.sheet-page[data-theme="network54"] {
+  --theme-primary: #d90000;
+  --theme-primary-dark: #940000;
+  --theme-secondary: #070707;
+  --theme-soft: #dcdcdc;
+  --theme-pale: #f2d8d8;
+  --theme-link: #d90000;
+}
+.sheet-page[data-theme="ncpd"] {
+  --theme-primary: #1c5fa8;
+  --theme-primary-dark: #113d70;
+  --theme-secondary: #07192b;
+  --theme-soft: #d8e4ef;
+  --theme-pale: #dce9f5;
+  --theme-link: #1c5fa8;
+}
+.sheet-page[data-theme="trauma-team"] {
+  --theme-primary: #2d8f6f;
+  --theme-primary-dark: #1b614a;
+  --theme-secondary: #173b3d;
+  --theme-soft: #d5ece4;
+  --theme-pale: #dff2ec;
+  --theme-link: #1f6b55;
+}
+.sheet-page[data-theme="arasaka"] {
+  --theme-primary: #d00000;
+  --theme-primary-dark: #8c0000;
+  --theme-secondary: #060606;
+  --theme-soft: #e2e2e2;
+  --theme-pale: #f2d6d6;
+  --theme-link: #d00000;
+}
+.sheet-page[data-theme="militech"] {
+  --theme-primary: #596b4c;
+  --theme-primary-dark: #36432e;
+  --theme-secondary: #202820;
+  --theme-soft: #dce2d7;
+  --theme-pale: #e4eadf;
+  --theme-link: #465c3b;
+}
+.sheet-page[data-theme="biotechnica"] {
+  --theme-primary: #2b9b54;
+  --theme-primary-dark: #1a6535;
+  --theme-secondary: #133322;
+  --theme-soft: #d9efdf;
+  --theme-pale: #e3f5e8;
+  --theme-link: #1d7f42;
+}
+.sheet-page[data-theme="mono"] {
+  --theme-primary: #111111;
+  --theme-primary-dark: #000000;
+  --theme-secondary: #222222;
+  --theme-soft: #e3e3e3;
+  --theme-pale: #f0f0f0;
+  --theme-link: #333333;
+}
