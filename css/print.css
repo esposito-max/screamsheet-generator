@@ -1,6 +1,6 @@
 @media print {
   body { background: #fff !important; }
-  #editor-ui, .modal, #export-status, .control-only, .block-remove, .page-remove { display: none !important; }
+  #editor-ui, .modal, #export-status, .control-only, .block-remove, .block-drag, .page-remove { display: none !important; }
   #document-container { width: 100%; margin: 0; display: block; }
   .sheet-page {
     box-shadow: none !important;
@@ -10,7 +10,7 @@
     break-after: page;
   }
   .sheet-page:last-child { page-break-after: auto; break-after: auto; }
-  [contenteditable="true"] { outline: 0 !important; }
+  [contenteditable="true"], .selected-block, .selected-grid, .drag-over { outline: 0 !important; }
   .image-frame, .image-drop-target { border-color: transparent !important; }
   .empty-label, .drop-label { display: none !important; }
 }

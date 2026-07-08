@@ -1,5 +1,6 @@
 export function blockShell(innerHtml, className = '') {
-  return `<article class="block ${className}">
+  return `<article class="block ${className}" draggable="false">
+    <button class="block-drag control-only" type="button" draggable="true" title="Drag block" aria-label="Drag block">☰</button>
     <button class="block-remove control-only" type="button" title="Remove block">×</button>
     ${innerHtml}
   </article>`;
@@ -54,7 +55,26 @@ export function createBlock(type = 'article') {
       </div>`, 'links-block'),
     image: () => blockShell(`
       <div class="image-frame tall image-drop-target contain" tabindex="0"><span class="empty-label">Click to add image / map / diagram</span><img class="image-slot" data-image-role="map" alt="Map or diagram" hidden /></div>
-      <p class="caption editable" contenteditable="true" data-placeholder="Caption">Diagram compiled from Agent telemetry and disputed CitiNet pings.</p>`, 'image-block'),
+      <p class="caption editable" contenteditable="true" data-placeholder="Caption">Diagram compiled from Agent telemetry and disputed CitiNet pings.</p>`, 'image-block span-all'),
+    'photo-article': () => blockShell(`
+      <div class="article photo-article">
+        <span class="kicker editable" contenteditable="true" data-placeholder="Kicker">STREET PHOTO</span>
+        <h2 class="editable" contenteditable="true" data-placeholder="Headline">Security Cam Still Raises Questions</h2>
+        <div class="image-frame inline-image image-drop-target cover" tabindex="0"><span class="empty-label">Click to add photo</span><img class="image-slot" data-image-role="photo" alt="Article photo" hidden /></div>
+        <p class="caption editable" contenteditable="true" data-placeholder="Caption">Recovered frame from an edited CitiNet feed.</p>
+        <p class="byline editable" contenteditable="true" data-placeholder="Byline">by Mira Vox</p>
+        <div class="article-body editable-block" contenteditable="true" data-placeholder="Article text"><p>The image circulating through local patches appears to show a masked crew near the transport minutes before the official emergency call.</p><p>Corporate spokespeople called the still “unauthenticated,” which in Night City usually means someone paid to keep it that way.</p></div>
+      </div>`, 'article-block image-pos-top'),
+    'hero-image': () => blockShell(`
+      <div class="hero-card image-drop-target cover" tabindex="0">
+        <span class="empty-label">Click to add full-width image</span>
+        <img class="image-slot" data-image-role="hero" alt="Hero image" hidden />
+        <div class="hero-overlay">
+          <span class="kicker editable" contenteditable="true" data-placeholder="Kicker">EXCLUSIVE</span>
+          <h2 class="editable" contenteditable="true" data-placeholder="Headline">Cargo Route Blackout</h2>
+          <p class="editable" contenteditable="true" data-placeholder="Caption">A full-width visual panel for photos, product shots, contact screenshots, maps, or advisory graphics.</p>
+        </div>
+      </div>`, 'hero-image-block span-all'),
     qa: () => blockShell(`
       <div class="qa-box">
         <h3 class="block-title editable" contenteditable="true" data-placeholder="Interview title">Interview Transcript</h3>
@@ -95,7 +115,7 @@ export function createPageBody(templateName = 'nct-multi') {
     'nct-multi': () => `
       <section class="sheet-grid grid-2">
         ${b('lead')}
-        <div class="sheet-grid grid-1">${b('article')}${b('article')}${b('links')}</div>
+        <div class="sheet-grid grid-1">${b('photo-article')}${b('article')}${b('links')}</div>
       </section>
       <section class="sheet-grid grid-3">${b('briefs')}${b('ad')}${b('warning')}</section>`,
     'lead-sidebar': () => `
@@ -136,6 +156,7 @@ export function createPageBody(templateName = 'nct-multi') {
       </section>`,
     'map-diagram': () => `
       <section class="sheet-grid grid-map">
+        ${b('hero-image')}
         ${b('image')}
         <div class="sheet-grid grid-1">${b('warning')}${b('timeline')}${b('links')}</div>
       </section>`,

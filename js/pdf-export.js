@@ -46,8 +46,9 @@ async function collectCssText() {
   parts.push(`
     body { margin: 0; background: #fff; }
     .sheet-page { box-shadow: none !important; outline: 0 !important; margin: 0 !important; }
-    .control-only, .block-remove, .page-remove, .drop-label, .empty-label { display: none !important; }
+    .control-only, .block-remove, .block-drag, .page-remove, .drop-label, .empty-label { display: none !important; }
     [contenteditable="true"] { outline: 0 !important; }
+    .selected-block, .selected-grid, .drag-over { outline: 0 !important; }
     .image-frame, .image-drop-target { border-color: transparent !important; }
   `);
   return parts.join('\n');
@@ -56,6 +57,7 @@ async function collectCssText() {
 async function renderPageToJpeg(page, cssText, size) {
   const clone = page.cloneNode(true);
   clone.classList.remove('active-page');
+  clone.querySelectorAll('.selected-block, .selected-grid, .dragging, .drag-over').forEach(el => el.classList.remove('selected-block', 'selected-grid', 'dragging', 'drag-over'));
   clone.style.width = `${size.cssWidth}px`;
   clone.style.height = `${size.cssHeight}px`;
   clone.style.minHeight = `${size.cssHeight}px`;

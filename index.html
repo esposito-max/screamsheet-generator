@@ -67,11 +67,65 @@
         <option value="pullquote">Pull quote</option>
         <option value="links">Links</option>
         <option value="image">Image / map</option>
+        <option value="photo-article">Photo article</option>
+        <option value="hero-image">Hero image</option>
         <option value="qa">Q&amp;A section</option>
         <option value="stat">Stat block</option>
         <option value="timeline">Timeline</option>
       </select>
       <button id="add-block-btn" type="button">Add Block</button>
+    </div>
+
+    <div class="toolbar-group layout-toolbar">
+      <label for="layout-select">Selected layout</label>
+      <select id="layout-select">
+        <option value="grid-1">1 column</option>
+        <option value="grid-2">2 columns</option>
+        <option value="grid-3">3 columns</option>
+        <option value="grid-sidebar-left">Sidebar left</option>
+        <option value="grid-sidebar-right">Sidebar right</option>
+        <option value="grid-feature">Feature split</option>
+        <option value="grid-map">Map + notes</option>
+      </select>
+      <div class="mini-button-row">
+        <button id="apply-layout-btn" type="button">Apply Layout</button>
+        <button id="add-section-btn" type="button">Add Section</button>
+      </div>
+    </div>
+
+    <div class="toolbar-group block-toolbar">
+      <label for="span-select">Selected block</label>
+      <select id="span-select">
+        <option value="span-1">Normal span</option>
+        <option value="span-2">Span 2 columns</option>
+        <option value="span-all">Full width</option>
+        <option value="span-compact">Compact/sidebar</option>
+      </select>
+      <div class="mini-button-row">
+        <button id="apply-span-btn" type="button">Apply Span</button>
+        <button id="move-up-btn" type="button">↑</button>
+        <button id="move-down-btn" type="button">↓</button>
+        <button id="duplicate-block-btn" type="button">Duplicate</button>
+      </div>
+    </div>
+
+    <div class="toolbar-group image-toolbar">
+      <label for="image-fit-select">Image tools</label>
+      <select id="image-fit-select">
+        <option value="contain">Contain</option>
+        <option value="cover">Cover</option>
+        <option value="stretch">Stretch</option>
+      </select>
+      <select id="image-position-select" aria-label="Image position">
+        <option value="image-pos-top">Top image</option>
+        <option value="image-pos-left">Left wrap</option>
+        <option value="image-pos-right">Right wrap</option>
+        <option value="image-pos-hero">Hero/background</option>
+      </select>
+      <div class="mini-button-row">
+        <button id="add-image-to-block-btn" type="button">Add Image Slot</button>
+        <button id="apply-image-fit-btn" type="button">Apply Image</button>
+      </div>
     </div>
 
     <div class="toolbar-actions">

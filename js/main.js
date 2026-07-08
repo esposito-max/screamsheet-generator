@@ -22,11 +22,26 @@ const els = {
   loadProjectInput: document.getElementById('load-project-input'),
   downloadPdfBtn: document.getElementById('download-pdf-btn'),
   printBtn: document.getElementById('print-btn'),
+  layoutSelect: document.getElementById('layout-select'),
+  applyLayoutBtn: document.getElementById('apply-layout-btn'),
+  addSectionBtn: document.getElementById('add-section-btn'),
+  spanSelect: document.getElementById('span-select'),
+  applySpanBtn: document.getElementById('apply-span-btn'),
+  moveUpBtn: document.getElementById('move-up-btn'),
+  moveDownBtn: document.getElementById('move-down-btn'),
+  duplicateBlockBtn: document.getElementById('duplicate-block-btn'),
+  imageFitSelect: document.getElementById('image-fit-select'),
+  imagePositionSelect: document.getElementById('image-position-select'),
+  addImageToBlockBtn: document.getElementById('add-image-to-block-btn'),
+  applyImageFitBtn: document.getElementById('apply-image-fit-btn'),
   exportStatus: document.getElementById('export-status')
 };
 
 let activePage = null;
+let activeBlock = null;
+let activeGrid = null;
 let imageTarget = null;
+let draggedBlock = null;
 let autosaveTimer = null;
 
 init();
@@ -84,6 +99,20 @@ function bindEvents() {
   els.loadProjectInput.addEventListener('change', loadProjectFile);
   els.downloadPdfBtn.addEventListener('click', exportPdf);
   els.printBtn.addEventListener('click', () => window.print());
+
+  els.applyLayoutBtn.addEventListener('click', applySelectedLayout);
+  els.addSectionBtn.addEventListener('click', addLayoutSection);
+  els.applySpanBtn.addEventListener('click', applySelectedSpan);
+  els.moveUpBtn.addEventListener('click', () => moveActiveBlock(-1));
+  els.moveDownBtn.addEventListener('click', () => moveActiveBlock(1));
+  els.duplicateBlockBtn.addEventListener('click', duplicateActiveBlock);
+  els.addImageToBlockBtn.addEventListener('click', addImageSlotToActiveBlock);
+  els.applyImageFitBtn.addEventListener('click', applyImageOptions);
+
+  els.documentContainer.addEventListener('dragstart', handleDragStart);
+  els.documentContainer.addEventListener('dragover', handleDragOver);
+  els.documentContainer.addEventListener('drop', handleDrop);
+  els.documentContainer.addEventListener('dragend', handleDragEnd);
 }
 
 function createPage(templateName) {
@@ -91,6 +120,7 @@ function createPage(templateName) {
   page.dataset.theme = els.themeSelect.value || 'nct';
   page.dataset.pageSize = els.pageSizeSelect.value || 'cyberpunk';
   page.querySelector('.sheet-body').innerHTML = createPageBody(templateName);
+  hydratePage(page);
   applyTemplateClass(page, templateName);
   applyThemeMasthead(page, page.dataset.theme);
   els.documentContainer.appendChild(page);
@@ -128,6 +158,29 @@ function setActivePage(page) {
   activePage = page;
   activePage.classList.add('active-page');
   if (activePage.dataset.theme) els.themeSelect.value = activePage.dataset.theme;
+  if (!activeGrid || !activePage.contains(activeGrid)) setActiveGrid(activePage.querySelector('.sheet-body'));
+}
+
+function setActiveBlock(block) {
+  if (activeBlock === block) return;
+  els.documentContainer.querySelectorAll('.selected-block').forEach(el => el.classList.remove('selected-block'));
+  activeBlock = block;
+  if (activeBlock) {
+    activeBlock.classList.add('selected-block');
+    const parentGrid = activeBlock.parentElement?.closest('.sheet-grid, .sheet-body');
+    if (parentGrid) setActiveGrid(parentGrid);
+    const spanClass = Array.from(activeBlock.classList).find(cls => cls.startsWith('span-')) || 'span-1';
+    els.spanSelect.value = ['span-1', 'span-2', 'span-all', 'span-compact'].includes(spanClass) ? spanClass : 'span-1';
+  }
+}
+
+function setActiveGrid(grid) {
+  if (!grid) return;
+  els.documentContainer.querySelectorAll('.selected-grid').forEach(el => el.classList.remove('selected-grid'));
+  activeGrid = grid;
+  activeGrid.classList.add('selected-grid');
+  const layoutClass = getLayoutClass(activeGrid) || 'grid-1';
+  if (els.layoutSelect.querySelector(`[value="${layoutClass}"]`)) els.layoutSelect.value = layoutClass;
 }
 
 function updatePageNumbers() {
@@ -160,14 +213,137 @@ function updatePrintPageSize(size) {
 
 function addSelectedBlock() {
   if (!activePage) createPage('blank');
-  const body = activePage.querySelector('.sheet-body');
-  body.insertAdjacentHTML('beforeend', createBlock(els.blockSelect.value));
+  const target = activeGrid && activePage.contains(activeGrid) ? activeGrid : activePage.querySelector('.sheet-body');
+  target.insertAdjacentHTML('beforeend', createBlock(els.blockSelect.value));
+  hydratePage(activePage);
+  const added = target.querySelector('.block:last-of-type');
+  if (added) setActiveBlock(added);
+  queueAutosave();
+}
+
+
+function hydratePage(page) {
+  page.querySelectorAll('.block').forEach(block => {
+    block.setAttribute('draggable', 'false');
+    if (!block.querySelector('.block-drag')) {
+      const drag = document.createElement('button');
+      drag.className = 'block-drag control-only';
+      drag.type = 'button';
+      drag.draggable = true;
+      drag.title = 'Drag block';
+      drag.setAttribute('aria-label', 'Drag block');
+      drag.textContent = '☰';
+      block.prepend(drag);
+    }
+  });
+  page.querySelectorAll('.sheet-grid, .sheet-body').forEach(grid => grid.classList.add('drop-container'));
+}
+
+function getLayoutClass(el) {
+  return Array.from(el.classList || []).find(cls => cls.startsWith('grid-'));
+}
+
+function setLayoutClass(el, layoutClass) {
+  el.classList.remove('grid-1', 'grid-2', 'grid-3', 'grid-sidebar-left', 'grid-sidebar-right', 'grid-feature', 'grid-bottom-cards', 'grid-map');
+  el.classList.add('sheet-grid', layoutClass);
+}
+
+function applySelectedLayout() {
+  if (!activePage) return;
+  const target = activeGrid && activePage.contains(activeGrid) ? activeGrid : activePage.querySelector('.sheet-body');
+  setLayoutClass(target, els.layoutSelect.value);
+  setActiveGrid(target);
+  queueAutosave();
+}
+
+function addLayoutSection() {
+  if (!activePage) createPage('blank');
+  const section = document.createElement('section');
+  section.className = `sheet-grid drop-container ${els.layoutSelect.value}`;
+  section.innerHTML = createBlock(els.blockSelect.value || 'article');
+  activePage.querySelector('.sheet-body').appendChild(section);
+  hydratePage(activePage);
+  setActiveGrid(section);
+  setActiveBlock(section.querySelector('.block'));
+  queueAutosave();
+}
+
+function applySelectedSpan() {
+  if (!activeBlock) return;
+  activeBlock.classList.remove('span-1', 'span-2', 'span-all', 'span-compact');
+  activeBlock.classList.add(els.spanSelect.value);
+  queueAutosave();
+}
+
+function moveActiveBlock(direction) {
+  if (!activeBlock) return;
+  const sibling = direction < 0 ? activeBlock.previousElementSibling : activeBlock.nextElementSibling;
+  if (!sibling) return;
+  if (direction < 0) activeBlock.parentElement.insertBefore(activeBlock, sibling);
+  else activeBlock.parentElement.insertBefore(sibling, activeBlock);
+  activeBlock.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  queueAutosave();
+}
+
+function duplicateActiveBlock() {
+  if (!activeBlock) return;
+  const clone = activeBlock.cloneNode(true);
+  clone.classList.remove('selected-block', 'dragging');
+  activeBlock.after(clone);
+  hydratePage(activePage || clone.closest('.sheet-page'));
+  setActiveBlock(clone);
+  queueAutosave();
+}
+
+function addImageSlotToActiveBlock() {
+  if (!activeBlock) return;
+  const frame = document.createElement('div');
+  frame.className = 'image-frame inline-image image-drop-target contain';
+  frame.tabIndex = 0;
+  frame.innerHTML = '<span class="empty-label">Click to add image</span><img class="image-slot" data-image-role="inline" alt="Inline image" hidden />';
+  const articleBody = activeBlock.querySelector('.article-body');
+  const caption = document.createElement('p');
+  caption.className = 'caption editable';
+  caption.contentEditable = 'true';
+  caption.dataset.placeholder = 'Caption';
+  caption.textContent = 'Image caption / source line.';
+  if (articleBody) {
+    articleBody.before(caption);
+    caption.before(frame);
+  } else {
+    activeBlock.append(frame, caption);
+  }
+  activeBlock.classList.remove('image-pos-left', 'image-pos-right', 'image-pos-hero');
+  activeBlock.classList.add('image-pos-top');
+  imageTarget = frame;
+  openAssetModal();
+  queueAutosave();
+}
+
+function applyImageOptions() {
+  const targetBlock = activeBlock || imageTarget?.closest('.block');
+  if (!targetBlock && !imageTarget) return;
+  const frames = imageTarget ? [imageTarget] : Array.from(targetBlock.querySelectorAll('.image-frame, .hero-card'));
+  frames.forEach(frame => {
+    frame.classList.remove('contain', 'cover', 'stretch');
+    frame.classList.add(els.imageFitSelect.value);
+  });
+  if (targetBlock) {
+    targetBlock.classList.remove('image-pos-top', 'image-pos-left', 'image-pos-right', 'image-pos-hero');
+    targetBlock.classList.add(els.imagePositionSelect.value);
+  }
   queueAutosave();
 }
 
 function handleDocumentClick(event) {
   const page = event.target.closest('.sheet-page');
   if (page) setActivePage(page);
+
+  const block = event.target.closest('.block');
+  if (block && !event.target.closest('.block-remove') && !event.target.closest('.image-drop-target')) setActiveBlock(block);
+
+  const clickedGrid = event.target.closest('.sheet-grid, .sheet-body');
+  if (clickedGrid && page && !event.target.closest('.block')) setActiveGrid(clickedGrid);
 
   const removePage = event.target.closest('.page-remove');
   if (removePage) {
@@ -187,7 +363,9 @@ function handleDocumentClick(event) {
 
   const removeBlock = event.target.closest('.block-remove');
   if (removeBlock) {
-    removeBlock.closest('.block')?.remove();
+    const doomed = removeBlock.closest('.block');
+    doomed?.remove();
+    if (doomed === activeBlock) setActiveBlock(null);
     queueAutosave();
     return;
   }
@@ -203,11 +381,73 @@ function handleDocumentClick(event) {
 
   const target = event.target.closest('.image-drop-target');
   if (target) {
+    const targetBlock = target.closest('.block');
+    if (targetBlock) setActiveBlock(targetBlock);
     imageTarget = target;
     document.querySelectorAll('.targeting').forEach(el => el.classList.remove('targeting'));
     imageTarget.classList.add('targeting');
     openAssetModal();
   }
+}
+
+
+function handleDragStart(event) {
+  const handle = event.target.closest('.block-drag');
+  const block = handle?.closest('.block');
+  if (!block) {
+    event.preventDefault();
+    return;
+  }
+  draggedBlock = block;
+  setActiveBlock(block);
+  block.classList.add('dragging');
+  event.dataTransfer.effectAllowed = 'move';
+  event.dataTransfer.setData('text/plain', 'screamsheet-block');
+}
+
+function handleDragOver(event) {
+  if (!draggedBlock) return;
+  const container = getDropContainer(event.target);
+  if (!container || draggedBlock.contains(container)) return;
+  event.preventDefault();
+  container.classList.add('drag-over');
+}
+
+function handleDrop(event) {
+  if (!draggedBlock) return;
+  const container = getDropContainer(event.target);
+  els.documentContainer.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+  if (!container || draggedBlock.contains(container)) return;
+  event.preventDefault();
+  const after = getBlockAfterPointer(container, event.clientY);
+  if (after) container.insertBefore(draggedBlock, after);
+  else container.appendChild(draggedBlock);
+  setActiveGrid(container);
+  setActiveBlock(draggedBlock);
+  queueAutosave();
+}
+
+function handleDragEnd() {
+  if (draggedBlock) draggedBlock.classList.remove('dragging');
+  draggedBlock = null;
+  els.documentContainer.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+}
+
+function getDropContainer(target) {
+  const block = target.closest?.('.block');
+  if (block && block.parentElement?.matches('.sheet-grid, .sheet-body')) return block.parentElement;
+  return target.closest?.('.sheet-grid, .sheet-body') || null;
+}
+
+function getBlockAfterPointer(container, y) {
+  const blocks = Array.from(container.children).filter(el => el.classList?.contains('block') && el !== draggedBlock);
+  let closest = { offset: Number.NEGATIVE_INFINITY, element: null };
+  blocks.forEach(block => {
+    const box = block.getBoundingClientRect();
+    const offset = y - box.top - box.height / 2;
+    if (offset < 0 && offset > closest.offset) closest = { offset, element: block };
+  });
+  return closest.element;
 }
 
 function handlePlainTextPaste(event) {
@@ -320,7 +560,7 @@ async function handleAssetUpload(event) {
 function buildProjectData() {
   return {
     app: 'cyberpunk-red-screamsheet-generator',
-    version: 2,
+    version: 3,
     savedAt: new Date().toISOString(),
     pageSize: els.pageSizeSelect.value,
     activeTheme: els.themeSelect.value,
@@ -353,6 +593,7 @@ function loadProjectData(data, { silent = false } = {}) {
     return;
   }
   els.documentContainer.innerHTML = sanitizeProjectHtml(data.html);
+  els.documentContainer.querySelectorAll('.sheet-page').forEach(hydratePage);
   els.pageSizeSelect.value = data.pageSize && PAGE_SIZES[data.pageSize] ? data.pageSize : 'cyberpunk';
   updatePageSize(els.pageSizeSelect.value);
   const firstPage = els.documentContainer.querySelector('.sheet-page');
@@ -373,6 +614,7 @@ function sanitizeProjectHtml(html) {
       if ((name === 'href' || name === 'src') && /^javascript:/i.test(value)) el.removeAttribute(attr.name);
     });
   });
+  doc.querySelectorAll('.selected-block, .selected-grid, .dragging, .drag-over').forEach(el => el.classList.remove('selected-block', 'selected-grid', 'dragging', 'drag-over'));
   return doc.querySelector('main').innerHTML;
 }
 
