@@ -1,24 +1,33 @@
-# Screamsheet Generator V11 — Vanilla
+# Screamsheet Generator V12 — Logo Fidelity Build
 
-Static HTML/CSS/JS Screamsheet generator for Cyberpunk RED campaign handouts.
+This build keeps the clean canvas architecture from V10/V11 but restores the Cyberpunk RED logo asset folder as a first-class part of the app.
 
-## Use
+## Included
 
-Open `index.html` in a browser or host the folder as static files.
+- `index.html`
+- `Cyberpunk RED Logos/` with 112 bundled PNG assets
+- zero required backend
+- zero npm requirement for normal use
 
-## V11 rebuild notes
+## Logo behavior
 
-- Clean canvas architecture: every block is an independent positioned object.
-- Templates are blank: they create page chrome and guide overlays only, never body blocks.
-- No global reflow and no destructive automatic pagination.
-- Optional visual guide overlays: blank, two columns, three columns, feature split, map + notes, grid.
-- Screamsheet-fidelity chrome for Night City Today, The Augmented Optic, Public Advisory, Mission Packet, and Minimal Print.
-- Styled blocks: Lead, Article, Briefs, Ad, Warning, Pull Quote, Image, Map, Q&A, Timeline, Stat, Links.
-- Markdown conversion for text blocks.
-- Font-size controls, X/Y/W/H geometry, z-order, lock, duplicate, delete.
-- PDF export renders from state and does not mutate the editor.
-- Uses `sgV11` localStorage key so old broken V-series drafts are not loaded automatically.
+- The bundled Cyberpunk RED logos appear in the Images & bundled logos sidebar.
+- Use the search box to find logos such as NCPD, Biotechnica, Night City Today, Arasaka, Trauma Team, etc.
+- The selected bundled logo can be used as:
+  - page masthead logo;
+  - image block;
+  - logo block;
+  - article/lead/ad image.
+- Uploaded images still work and are stored inside the project JSON as data URLs.
 
-## Tested
+## Page behavior
 
-See `V11_TEST_REPORT.json`.
+- Templates remain blank: they add no body blocks.
+- Template chrome uses the actual bundled logos instead of a fake hand-built SVG.
+- Body guide overlays remain visual only.
+- Moving/resizing still affects only the selected block.
+- Export remains read-only.
+
+## Deployment
+
+For GitHub Pages, upload the package root so `index.html` and `Cyberpunk RED Logos/` remain siblings.
