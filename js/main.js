@@ -41,7 +41,8 @@ const els = {
   fontLargerBtn: document.getElementById('font-larger-btn'),
   autoFlowToggle: document.getElementById('auto-flow-toggle'),
   blockAutoFlowToggle: document.getElementById('block-auto-flow-toggle'),
-  reflowNowBtn: document.getElementById('reflow-now-btn'),
+  flowSelectedBtn: document.getElementById('flow-selected-btn'),
+  checkOverflowBtn: document.getElementById('check-overflow-btn'),
   blockXInput: document.getElementById('block-x-input'),
   blockYInput: document.getElementById('block-y-input'),
   blockWInput: document.getElementById('block-w-input'),
@@ -138,7 +139,8 @@ function bindEvents() {
   els.applyFontSizeBtn.addEventListener('click', applyFontSizeOptions);
   els.fontSmallerBtn.addEventListener('click', () => stepSelectedFontSize(-1));
   els.fontLargerBtn.addEventListener('click', () => stepSelectedFontSize(1));
-  els.reflowNowBtn.addEventListener('click', () => runLayoutMaintenance({ forcePagination: true }));
+  els.flowSelectedBtn?.addEventListener('click', flowSelectedBlock);
+  els.checkOverflowBtn?.addEventListener('click', showOverflowWarnings);
   els.autoFlowToggle.addEventListener('change', () => queueAutosave());
   els.blockAutoFlowToggle?.addEventListener('change', applySelectedBlockAutoFlow);
   els.applyPositionBtn?.addEventListener('click', applyFreeLayoutInputs);
@@ -153,11 +155,31 @@ function bindEvents() {
   els.documentContainer.addEventListener('dragend', handleDragEnd);
 }
 
+
+function getTemplateLayout(templateName) {
+  return {
+    'nct-multi': 'grid-2',
+    'lead-sidebar': 'grid-sidebar-right',
+    'product-ad': 'grid-feature',
+    'public-advisory': 'grid-1',
+    interview: 'grid-sidebar-left',
+    'mission-cover': 'grid-1',
+    'gm-scenario': 'grid-2',
+    'map-diagram': 'grid-map',
+    'stat-encounter': 'grid-2',
+    blank: 'grid-1'
+  }[templateName] || 'grid-1';
+}
+
 function createPage(templateName) {
   const page = els.pageTemplate.content.firstElementChild.cloneNode(true);
   page.dataset.theme = els.themeSelect.value || 'nct';
   page.dataset.pageSize = els.pageSizeSelect.value || 'cyberpunk';
-  page.querySelector('.sheet-body').innerHTML = createPageBody(templateName);
+  const body = page.querySelector('.sheet-body');
+  body.innerHTML = createPageBody(templateName);
+  body.classList.add('empty-template');
+  body.dataset.emptyLabel = 'Empty page — add blocks here';
+  setLayoutClass(body, getTemplateLayout(templateName));
   hydratePage(page);
   applyTemplateClass(page, templateName);
   applyThemeMasthead(page, page.dataset.theme);
@@ -196,7 +218,7 @@ function setActivePage(page) {
   activePage = page;
   activePage.classList.add('active-page');
   if (activePage.dataset.theme) els.themeSelect.value = activePage.dataset.theme;
-  if (!activeGrid || !activePage.contains(activeGrid)) setActiveGrid(activePage.querySelector('.sheet-body'));
+  if (!activeGrid || !activePage.contains(activeGrid)) setActiveGrid(activePage.querySelector('.sheet-grid') || activePage.querySelector('.sheet-body'));
 }
 
 function setActiveBlock(block) {
@@ -314,9 +336,6 @@ function hydratePage(page) {
   });
   page.querySelectorAll('.sheet-grid, .sheet-body').forEach(grid => {
     grid.classList.add('drop-container');
-    if (grid.classList.contains('free-layout') || grid.querySelector(':scope > [data-free-w], :scope > .manual-positioned')) {
-      enableManualPositioning(grid);
-    }
   });
 }
 
@@ -332,7 +351,6 @@ function setLayoutClass(el, layoutClass) {
 function applySelectedLayout() {
   if (!activePage) return;
   const target = activeGrid && activePage.contains(activeGrid) ? activeGrid : activePage.querySelector('.sheet-body');
-  if (els.layoutSelect.value === 'free-layout') enableManualPositioning(target);
   setLayoutClass(target, els.layoutSelect.value);
   if (els.layoutSelect.value === 'free-layout') initializeFreeLayout(target);
   setActiveGrid(target);
@@ -342,13 +360,13 @@ function applySelectedLayout() {
 function addLayoutSection() {
   if (!activePage) createPage('blank');
   const section = document.createElement('section');
-  section.className = `sheet-grid drop-container ${els.layoutSelect.value}`;
-  section.innerHTML = createBlock(els.blockSelect.value || 'article');
+  section.className = `sheet-grid drop-container empty-layout-section ${els.layoutSelect.value}`;
+  section.dataset.emptyLabel = 'Empty section — add blocks here';
   activePage.querySelector('.sheet-body').appendChild(section);
   hydratePage(activePage);
   if (section.classList.contains('free-layout')) initializeFreeLayout(section);
   setActiveGrid(section);
-  setActiveBlock(section.querySelector('.block'));
+  setActiveBlock(null);
   queueAutosave();
 }
 
@@ -554,6 +572,15 @@ function writeBlockBox(block, box) {
   updateContainerManualHeight(container);
 }
 
+
+function ensureBlockManualBox(block) {
+  if (!block || !isPositionableContainer(block.parentElement)) return false;
+  if (block.classList.contains('manual-positioned') || block.dataset.freeW) return true;
+  const visual = readVisualBox(block);
+  writeBlockBox(block, visual);
+  return true;
+}
+
 function enableManualPositioning(container) {
   if (!isPositionableContainer(container)) return;
   const blocks = getPositionableChildren(container);
@@ -621,12 +648,13 @@ function applyCandidateBox(block, candidate, { allowOverlap = false } = {}) {
 
 function initializeFreeLayout(container) {
   if (!container) return;
-  enableManualPositioning(container);
+  container.classList.add('manual-canvas');
+  updateContainerManualHeight(container);
 }
 
 function placeBlockInFreeLayout(block, container, options = {}) {
   if (!isPositionableContainer(container)) return false;
-  if (!container.classList.contains('manual-canvas') && isFreeLayoutContainer(container)) enableManualPositioning(container);
+  if (isFreeLayoutContainer(container)) container.classList.add('manual-canvas');
   const basis = options.basis || readBlockBox(block);
   const baseW = Math.min(Math.max(180, basis.w || 260), Math.max(180, (container.clientWidth || 640) - 20));
   const baseH = Math.min(Math.max(80, basis.h || (block.classList.contains('lead-block') ? 230 : block.classList.contains('hero-image-block') ? 260 : 170)), Math.max(80, (container.clientHeight || 760) - 20));
@@ -675,7 +703,7 @@ function applyFreeLayoutInputs() {
   }
   const snap = getSnapValue();
   const container = activeBlock.parentElement;
-  enableManualPositioning(container);
+  ensureBlockManualBox(activeBlock);
   const candidate = {
     x: snapNumber(Number(els.blockXInput.value), snap),
     y: snapNumber(Number(els.blockYInput.value), snap),
@@ -688,7 +716,7 @@ function applyFreeLayoutInputs() {
 
 function stepBlockZIndex(delta) {
   if (!activeBlock) return;
-  enableManualPositioning(activeBlock.parentElement);
+  ensureBlockManualBox(activeBlock);
   const current = Number(activeBlock.style.zIndex || activeBlock.dataset.zIndex || 1);
   const next = clampNumber(current + delta, 1, 99, 1);
   activeBlock.style.zIndex = String(next);
@@ -713,7 +741,7 @@ function handleFreePointerDown(event) {
   event.stopPropagation();
   if (block.classList.contains('block-locked')) return;
   setActiveBlock(block);
-  enableManualPositioning(block.parentElement);
+  ensureBlockManualBox(block);
   clearCollisionMarkers(block.parentElement);
   const start = readBlockBox(block);
   freePointerState = {
@@ -1115,7 +1143,7 @@ async function handleAssetUpload(event) {
 function buildProjectData() {
   return {
     app: 'cyberpunk-red-screamsheet-generator',
-    version: 5,
+    version: 8,
     savedAt: new Date().toISOString(),
     pageSize: els.pageSizeSelect.value,
     activeTheme: els.themeSelect.value,
@@ -1187,8 +1215,64 @@ function queueLayoutMaintenance({ allowPagination = false } = {}) {
 
 function runLayoutMaintenance({ forcePagination = false, allowPagination = false } = {}) {
   fitHeadlines(els.documentContainer);
-  if (forcePagination || (allowPagination && els.autoFlowToggle?.checked)) paginateOverflow();
+  // No global reflow. Global pagination was destructive in a mixed manual-layout editor.
+  // Auto-flow only affects the currently selected text block after direct editing.
+  if ((forcePagination || allowPagination) && els.autoFlowToggle?.checked && activeBlock && blockContentOverflows(activeBlock)) {
+    continueOverflowingBlock(activeBlock);
+  }
   updatePageNumbers();
+}
+
+
+function showOverflowWarnings() {
+  clearOverflowMarkers();
+  const pages = Array.from(els.documentContainer.querySelectorAll('.sheet-page'));
+  let warnings = 0;
+  pages.forEach(page => {
+    page.querySelectorAll('.block').forEach(block => {
+      if (blockContentOverflows(block) || !blockFitsWithinPageBody(block)) {
+        block.classList.add('flow-warning');
+        warnings += 1;
+      }
+    });
+    if (pageOverflows(page)) page.classList.add('flow-warning');
+  });
+  if (warnings === 0) showStatus('No overflow detected.');
+  else showStatus(`${warnings} block(s) need more space or a continuation.`);
+  setTimeout(hideStatus, 2600);
+}
+
+function clearOverflowMarkers(scope = els.documentContainer) {
+  scope?.querySelectorAll?.('.flow-warning')?.forEach(el => el.classList.remove('flow-warning'));
+  scope?.querySelectorAll?.('.flow-note')?.forEach(el => el.remove());
+}
+
+function flowSelectedBlock() {
+  if (!activeBlock) {
+    alert('Select a text block first.');
+    return;
+  }
+  clearOverflowMarkers(activeBlock.closest('.sheet-page') || els.documentContainer);
+  if (!isSplittableBlock(activeBlock)) {
+    alert('The selected block does not contain splittable article text.');
+    return;
+  }
+  if (activeBlock.dataset.autoFlow === 'off') activeBlock.dataset.autoFlow = 'on';
+  fitHeadlines(activeBlock);
+  if (!blockContentOverflows(activeBlock)) {
+    showStatus('Selected block does not currently overflow.');
+    setTimeout(hideStatus, 2200);
+    return;
+  }
+  const changed = continueOverflowingBlock(activeBlock);
+  if (!changed) {
+    activeBlock.classList.add('flow-warning');
+    alert('Could not create a safe continuation. Reduce font size, resize the block, or add room manually.');
+    return;
+  }
+  updatePageNumbers();
+  hydratePage(activeBlock.closest('.sheet-page') || activePage);
+  queueAutosave();
 }
 
 function fitHeadlines(root = document) {
@@ -1467,7 +1551,7 @@ function getContinuationTarget(sourcePage, sourceContainer) {
   const manual = sourceContainer.classList.contains('manual-canvas') || sourceContainer.classList.contains('free-layout');
   if (sourceContainer.matches('.sheet-body')) {
     if (layout && layout !== getLayoutClass(nextBody)) setLayoutClass(nextBody, layout);
-    if (manual) enableManualPositioning(nextBody);
+    if (manual) nextBody.classList.add('manual-canvas');
     return nextBody;
   }
   let section = nextBody.querySelector(`.sheet-grid.${layout}.flow-target`);
@@ -1476,7 +1560,7 @@ function getContinuationTarget(sourcePage, sourceContainer) {
     section.className = `sheet-grid drop-container flow-target ${layout}`;
     nextBody.prepend(section);
   }
-  if (manual) enableManualPositioning(section);
+  if (manual) section.classList.add('manual-canvas');
   return section;
 }
 

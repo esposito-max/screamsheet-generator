@@ -111,63 +111,24 @@ export function createBlock(type = 'article') {
 }
 
 export function createPageBody(templateName = 'nct-multi') {
-  const b = createBlock;
+  // V8: page templates are structural starting points only. They must not
+  // pre-fill the page with sample blocks. The user adds blocks explicitly.
+  const empty = (layout = 'grid-1', label = 'Empty page — add blocks here') =>
+    `<section class="sheet-grid drop-container empty-layout-section ${layout}" data-empty-label="${label}"></section>`;
+
   const templates = {
-    'nct-multi': () => `
-      <section class="sheet-grid grid-2">
-        ${b('lead')}
-        <div class="sheet-grid grid-1">${b('photo-article')}${b('article')}${b('links')}</div>
-      </section>
-      <section class="sheet-grid grid-3">${b('briefs')}${b('ad')}${b('warning')}</section>`,
-    'lead-sidebar': () => `
-      <section class="sheet-grid grid-sidebar-right">
-        <div class="sheet-grid grid-1">${b('lead')}${b('pullquote')}${b('article')}</div>
-        <div class="sheet-grid grid-1">${b('briefs')}${b('ad')}${b('links')}</div>
-      </section>`,
-    'product-ad': () => `
-      <section class="sheet-grid grid-feature">
-        <div class="sheet-grid grid-1">${b('ad')}${b('warning')}</div>
-        <div class="sheet-grid grid-1">${b('article')}${b('pullquote')}${b('links')}</div>
-      </section>
-      <section class="sheet-grid grid-bottom-cards">${b('ad')}${b('ad')}${b('ad')}</section>`,
-    'public-advisory': () => `
-      <section class="sheet-grid grid-1">
-        ${b('warning')}
-        <div class="sheet-grid grid-2">${b('article')}${b('timeline')}</div>
-        <div class="sheet-grid grid-3">${b('briefs')}${b('links')}${b('ad')}</div>
-      </section>`,
-    'interview': () => `
-      <section class="sheet-grid grid-sidebar-left">
-        <div class="sheet-grid grid-1">${b('image')}${b('briefs')}</div>
-        <div class="sheet-grid grid-1">${b('lead')}${b('qa')}${b('pullquote')}</div>
-      </section>`,
-    'mission-cover': () => `
-      <section class="mission-cover">
-        <span class="cover-kicker editable" contenteditable="true" data-placeholder="Cover kicker">SCREAMSHEET MISSION</span>
-        <h1 class="editable" contenteditable="true" data-placeholder="Mission title">Red Chrome Cargo</h1>
-        <p class="editable-block" contenteditable="true" data-placeholder="Mission pitch">A hot cargo job, a moving target, and a gang with too much hardware. Give the Crew a reason to run before the train clears the district.</p>
-        <div class="cover-meta editable-block" contenteditable="true" data-placeholder="Cover metadata"><span>For Cyberpunk RED</span><span>Player Handout + GM Notes</span><span>Night City, 2045</span></div>
-      </section>`,
-    'gm-scenario': () => `
-      <section class="gm-page">
-        <div class="gm-banner editable" contenteditable="true" data-placeholder="GM page title">GM SCENARIO NOTES // NOT PLAYER FACING</div>
-        <div class="sheet-grid grid-2" style="margin-top:12px;">
-          ${gmScenarioBlocks()}
-        </div>
-      </section>`,
-    'map-diagram': () => `
-      <section class="sheet-grid grid-map">
-        ${b('hero-image')}
-        ${b('image')}
-        <div class="sheet-grid grid-1">${b('warning')}${b('timeline')}${b('links')}</div>
-      </section>`,
-    'stat-encounter': () => `
-      <section class="sheet-grid grid-2">${b('stat')}${b('stat')}</section>
-      <section class="sheet-grid grid-2">${b('warning')}${b('timeline')}</section>
-      <section class="sheet-grid grid-1">${b('article')}</section>`,
-    'blank': () => `<section class="sheet-grid grid-1">${b('article')}</section>`
+    'nct-multi': () => empty('grid-2', 'Empty NCT page — add lead, articles, briefs, ads, or images'),
+    'lead-sidebar': () => empty('grid-sidebar-right', 'Empty lead + sidebar page — add blocks'),
+    'product-ad': () => empty('grid-feature', 'Empty product/ad page — add ad and article blocks'),
+    'public-advisory': () => empty('grid-1', 'Empty advisory page — add warning, timeline, or article blocks'),
+    'interview': () => empty('grid-sidebar-left', 'Empty interview page — add Q&A, image, and article blocks'),
+    'mission-cover': () => empty('grid-1', 'Empty mission cover — add hero image, title, or text blocks'),
+    'gm-scenario': () => empty('grid-2', 'Empty GM scenario page — add GM notes, stats, hooks, or timelines'),
+    'map-diagram': () => empty('grid-map', 'Empty map/diagram page — add image, map, notes, or links'),
+    'stat-encounter': () => empty('grid-2', 'Empty encounter page — add stat and warning blocks'),
+    'blank': () => empty('grid-1', 'Empty blank page — add blocks')
   };
-  return (templates[templateName] || templates['nct-multi'])();
+  return (templates[templateName] || templates['blank'])();
 }
 
 function gmScenarioBlocks() {

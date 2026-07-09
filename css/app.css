@@ -721,8 +721,7 @@ select, input[type="text"], input[type="number"] {
 .sheet-body > .block.manual-positioned,
 .sheet-grid > .block.manual-positioned,
 .sheet-body > .sheet-grid.manual-positioned,
-.sheet-grid > .sheet-grid.manual-positioned,
-.free-layout > .block {
+.sheet-grid > .sheet-grid.manual-positioned {
   position: absolute;
   left: var(--free-x, 0px);
   top: var(--free-y, 0px);
@@ -818,3 +817,45 @@ select, input[type="text"], input[type="number"] {
 /* V7: nested layout grids must size to their own content; otherwise later sections can climb under overflowing nested columns. */
 .sheet-grid > .sheet-grid { align-self: start; height: max-content; min-height: max-content; }
 .sheet-body > .sheet-grid { flex-shrink: 0; }
+
+
+/* V8 empty-template and safer manual-layout behavior */
+.sheet-body.sheet-grid,
+.sheet-body.free-layout {
+  display: grid;
+}
+.sheet-body.empty-template,
+.sheet-grid.empty-layout-section,
+.sheet-body > .sheet-grid:empty {
+  min-height: 220px;
+}
+.sheet-body.empty-template::before,
+.sheet-grid.empty-layout-section:empty::before,
+.sheet-body > .sheet-grid:empty::before {
+  content: attr(data-empty-label);
+  display: grid;
+  place-items: center;
+  min-height: 160px;
+  border: 2px dashed rgba(0,0,0,.28);
+  color: var(--sheet-muted);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  font-size: 11px;
+  background: rgba(255,255,255,.18);
+  padding: 14px;
+  text-align: center;
+  grid-column: 1 / -1;
+}
+.sheet-body.empty-template:has(.block)::before,
+.sheet-body.empty-template:has(.sheet-grid:not(:empty))::before {
+  display: none;
+}
+.sheet-grid.empty-layout-section:not(:empty)::before {
+  display: none;
+}
+.free-layout > .block:not(.manual-positioned) {
+  position: relative;
+  width: auto;
+  height: auto;
+}

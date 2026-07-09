@@ -1,36 +1,22 @@
-# Screamsheet Generator — Vanilla / Established Stack V7
+# Screamsheet Generator V8 — Vanilla / established stack
 
-Static Cyberpunk RED Screamsheet editor. Open `index.html` directly or host the folder as a static site.
+This package contains the V8 Screamsheet Generator.
 
-## V7 interaction fixes
+## V8 changes
 
-- Reworked block interaction so the move handle, reorder handle, and resize handle are separate controls.
-- Fixed the mass-overlap failure caused by reading default/free-layout coordinates instead of the actual rendered block positions.
-- Moving or resizing now freezes the current visual layout from `getBoundingClientRect()` before applying manual geometry.
-- Nested grids are handled as layout items, so a block inside a multi-column/nested layout no longer collapses the surrounding layout when selected, resized, or moved.
-- Reordering no longer shares the same handle/path as manual movement.
-- Collision markers are cleared and recalculated per interaction instead of persisting as stale state.
-- Background autosave no longer triggers full auto-pagination after every layout interaction. Reflow still runs when explicitly requested through **Reflow Now**, and text-edit auto-flow remains available from content edits.
+- Page templates now start empty. They provide a page/layout structure only; they do not auto-insert sample blocks.
+- The global **Reflow Now** command has been removed.
+- Added non-destructive **Show Overflow Warnings**.
+- Added selected-block scoped **Flow Selected Text Block**.
+- Manual movement, resizing, exact geometry controls, image support, Markdown conversion, project save/load, and PDF export remain available.
+- Export remains read-only: failed export attempts should not mutate the editor state.
 
-## Core capabilities
+## Layout behavior
 
-- Sidebar accordion UI.
-- Night City Today-style Screamsheet templates.
-- Add, duplicate, delete, move, resize, and reorder blocks.
-- Granular `X / Y / W / H` positioning in all layouts.
-- Collision prevention for positioned blocks.
-- Auto-flow support in all layouts, including Free layout.
-- Per-block auto-flow toggle.
-- Font-size controls for title and body text.
-- Markdown recognition and safe conversion.
-- Image upload, asset library, image/map blocks, and image placement controls.
-- Project save/load as JSON.
-- Download PDF and print fallback.
+Templates and layout presets are starting structures/guides. Add the blocks you need from the **Add Blocks** section, then move/resize them manually as needed.
 
-## V6 export stability retained
+Text continuation is deliberately scoped to the selected block. No command should restructure the entire document unless you deliberately reset or rebuild a page.
 
-The PDF export button is read-only: it does not run auto-flow or collision repair on the live editor document. If a browser blocks the direct raster renderer, the app falls back to a safe canvas/PDF renderer instead of mutating the working document. Print Fallback remains available.
+## Testing
 
-## Notes
-
-If a block is too large to fit inside any printable area, the app marks it with an overflow warning instead of endlessly creating pages. Reduce the font size, resize the block, or make more room for continuation content.
+See `V8_TEST_REPORT.txt` for the browser interaction checks run against both the Vanilla and Svelte root builds.
