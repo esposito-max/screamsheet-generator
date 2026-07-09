@@ -29,3 +29,8 @@ Static Cyberpunk RED Screamsheet editor. Open `index.html` directly or host the 
 ## Notes
 
 If a block is too large to fit inside any printable area, the app marks it with an overflow warning instead of endlessly creating pages. Reduce the font size, resize the block, or make more room for continuation content.
+
+
+## V6 export stability note
+
+The PDF export button is read-only: it no longer runs auto-flow or collision repair on the live editor document. If a browser blocks the direct raster renderer, the app falls back to a safe canvas/PDF renderer instead of mutating the working document. Print Fallback remains available for browser-native PDF printing.

@@ -1471,9 +1471,18 @@ function markPageOverflow(page) {
 
 
 async function exportPdf() {
-  runLayoutMaintenance({ forcePagination: true });
   const pages = Array.from(els.documentContainer.querySelectorAll('.sheet-page'));
   if (!pages.length) return;
+
+  // Export must be read-only. It must never run auto-flow, create continuation
+  // blocks, or update overlap/collision markers on the live editor document.
+  // Keep a snapshot anyway so a browser-side rendering failure cannot leave the
+  // editor in a corrupted intermediate state.
+  if (layoutMaintenanceTimer) {
+    clearTimeout(layoutMaintenanceTimer);
+    layoutMaintenanceTimer = null;
+  }
+  const snapshot = captureEditorSnapshot();
   const oldText = els.downloadPdfBtn.textContent;
   els.downloadPdfBtn.disabled = true;
   showStatus('Preparing export...');
@@ -1486,12 +1495,37 @@ async function exportPdf() {
     showStatus('PDF download started.');
     setTimeout(hideStatus, 2200);
   } catch (error) {
+    restoreEditorSnapshot(snapshot);
     hideStatus();
-    alert(`${error.message || 'PDF export failed.'}\n\nUse Print Fallback if your browser is blocking local file rendering.`);
+    alert(`${error.message || 'PDF export failed.'}\n\nThe editor state was restored. Use Print Fallback if this browser blocks direct PDF rendering.`);
   } finally {
     els.downloadPdfBtn.disabled = false;
     els.downloadPdfBtn.textContent = oldText;
   }
+}
+
+function captureEditorSnapshot() {
+  return {
+    html: els.documentContainer.innerHTML,
+    pageSize: els.pageSizeSelect.value,
+    activePageIndex: Math.max(0, Array.from(els.documentContainer.querySelectorAll('.sheet-page')).indexOf(activePage)),
+    activeBlockIndex: activeBlock ? Math.max(0, Array.from(activeBlock.closest('.sheet-page')?.querySelectorAll('.block') || []).indexOf(activeBlock)) : -1
+  };
+}
+
+function restoreEditorSnapshot(snapshot) {
+  if (!snapshot || typeof snapshot.html !== 'string') return;
+  els.documentContainer.innerHTML = snapshot.html;
+  els.documentContainer.querySelectorAll('.sheet-page').forEach(hydratePage);
+  updatePageSize(snapshot.pageSize || els.pageSizeSelect.value || 'cyberpunk');
+  const pages = Array.from(els.documentContainer.querySelectorAll('.sheet-page'));
+  const page = pages[Math.min(snapshot.activePageIndex || 0, Math.max(0, pages.length - 1))];
+  if (page) {
+    setActivePage(page);
+    const blocks = Array.from(page.querySelectorAll('.block'));
+    if (snapshot.activeBlockIndex >= 0 && blocks[snapshot.activeBlockIndex]) selectBlock(blocks[snapshot.activeBlockIndex]);
+  }
+  updatePageNumbers();
 }
 
 function makePdfFilename() {
