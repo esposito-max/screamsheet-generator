@@ -20,3 +20,10 @@ Text continuation is deliberately scoped to the selected block. No command shoul
 ## Testing
 
 See `V8_TEST_REPORT.txt` for the browser interaction checks run against both the Vanilla and Svelte root builds.
+
+
+## V9 blank-template correction
+
+- Templates now create truly blank pages: zero blocks and zero real placeholder/drop-zone sections.
+- Empty-page hints are CSS-only overlays. They do not occupy layout space, cannot be selected, cannot overlap, and are not exported as blocks.
+- Layout presets set the initial page guide only; all content is added manually through Add Blocks.

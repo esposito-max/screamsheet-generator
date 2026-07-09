@@ -111,24 +111,11 @@ export function createBlock(type = 'article') {
 }
 
 export function createPageBody(templateName = 'nct-multi') {
-  // V8: page templates are structural starting points only. They must not
-  // pre-fill the page with sample blocks. The user adds blocks explicitly.
-  const empty = (layout = 'grid-1', label = 'Empty page — add blocks here') =>
-    `<section class="sheet-grid drop-container empty-layout-section ${layout}" data-empty-label="${label}"></section>`;
-
-  const templates = {
-    'nct-multi': () => empty('grid-2', 'Empty NCT page — add lead, articles, briefs, ads, or images'),
-    'lead-sidebar': () => empty('grid-sidebar-right', 'Empty lead + sidebar page — add blocks'),
-    'product-ad': () => empty('grid-feature', 'Empty product/ad page — add ad and article blocks'),
-    'public-advisory': () => empty('grid-1', 'Empty advisory page — add warning, timeline, or article blocks'),
-    'interview': () => empty('grid-sidebar-left', 'Empty interview page — add Q&A, image, and article blocks'),
-    'mission-cover': () => empty('grid-1', 'Empty mission cover — add hero image, title, or text blocks'),
-    'gm-scenario': () => empty('grid-2', 'Empty GM scenario page — add GM notes, stats, hooks, or timelines'),
-    'map-diagram': () => empty('grid-map', 'Empty map/diagram page — add image, map, notes, or links'),
-    'stat-encounter': () => empty('grid-2', 'Empty encounter page — add stat and warning blocks'),
-    'blank': () => empty('grid-1', 'Empty blank page — add blocks')
-  };
-  return (templates[templateName] || templates['blank'])();
+  // V9: templates are truly blank. They do not insert real layout
+  // sections, block placeholders, or predetermined drop zones. The
+  // selected template only chooses the page's initial guide/layout class
+  // in main.js; the user adds all blocks explicitly.
+  return '';
 }
 
 function gmScenarioBlocks() {

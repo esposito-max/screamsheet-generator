@@ -819,41 +819,49 @@ select, input[type="text"], input[type="number"] {
 .sheet-body > .sheet-grid { flex-shrink: 0; }
 
 
-/* V8 empty-template and safer manual-layout behavior */
+/* V9: blank templates are actually blank. Empty-page labels are CSS-only
+   overlays: they do not create layout boxes, reserve space, or participate
+   in collision/reorder/export logic. */
 .sheet-body.sheet-grid,
 .sheet-body.free-layout {
   display: grid;
+  position: relative;
 }
-.sheet-body.empty-template,
-.sheet-grid.empty-layout-section,
-.sheet-body > .sheet-grid:empty {
-  min-height: 220px;
-}
-.sheet-body.empty-template::before,
-.sheet-grid.empty-layout-section:empty::before,
-.sheet-body > .sheet-grid:empty::before {
+.sheet-body.empty-template:empty::before {
   content: attr(data-empty-label);
+  position: absolute;
+  inset: 0;
   display: grid;
   place-items: center;
-  min-height: 160px;
-  border: 2px dashed rgba(0,0,0,.28);
+  pointer-events: none;
   color: var(--sheet-muted);
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: .08em;
   font-size: 11px;
-  background: rgba(255,255,255,.18);
-  padding: 14px;
   text-align: center;
-  grid-column: 1 / -1;
+  opacity: .72;
 }
-.sheet-body.empty-template:has(.block)::before,
-.sheet-body.empty-template:has(.sheet-grid:not(:empty))::before {
-  display: none;
+.sheet-grid.empty-layout-section {
+  position: relative;
+  min-height: 60px;
 }
-.sheet-grid.empty-layout-section:not(:empty)::before {
-  display: none;
+.sheet-grid.empty-layout-section:empty::before {
+  content: attr(data-empty-label);
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  color: var(--sheet-muted);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  font-size: 10px;
+  text-align: center;
+  opacity: .65;
 }
+.sheet-grid.empty-layout-section:not(:empty)::before { display: none; }
 .free-layout > .block:not(.manual-positioned) {
   position: relative;
   width: auto;
