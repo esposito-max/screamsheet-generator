@@ -2,7 +2,6 @@ import { ASSET_LIBRARY, DEFAULT_ASSETS } from './assets.js';
 import { createBlock, createPageBody } from './templates.js';
 import { PAGE_SIZES, downloadPagesAsPdf } from './pdf-export.js';
 import { readUserAssets, writeUserAssets, clearUserAssets, downloadJson, fileToDataUrl, saveAutosave, readAutosave } from './storage.js';
-import { maintainReadableLayout, fitAllHeadlines } from './layout-flow.js';
 
 const els = {
   documentContainer: document.getElementById('document-container'),
@@ -35,6 +34,13 @@ const els = {
   imagePositionSelect: document.getElementById('image-position-select'),
   addImageToBlockBtn: document.getElementById('add-image-to-block-btn'),
   applyImageFitBtn: document.getElementById('apply-image-fit-btn'),
+  bodyFontSizeInput: document.getElementById('body-font-size-input'),
+  titleFontSizeInput: document.getElementById('title-font-size-input'),
+  applyFontSizeBtn: document.getElementById('apply-font-size-btn'),
+  fontSmallerBtn: document.getElementById('font-smaller-btn'),
+  fontLargerBtn: document.getElementById('font-larger-btn'),
+  autoFlowToggle: document.getElementById('auto-flow-toggle'),
+  reflowNowBtn: document.getElementById('reflow-now-btn'),
   exportStatus: document.getElementById('export-status')
 };
 
@@ -44,7 +50,9 @@ let activeGrid = null;
 let imageTarget = null;
 let draggedBlock = null;
 let autosaveTimer = null;
-let layoutTimer = null;
+let layoutMaintenanceTimer = null;
+let isPaginating = false;
+let lastFocusedEditable = null;
 
 init();
 
@@ -59,9 +67,7 @@ function init() {
   bindEvents();
   renderAssetLibrary();
   updatePageSize(els.pageSizeSelect.value);
-  queueLayoutMaintenance(0);
 }
-
 
 function bindEvents() {
   els.addTemplatePageBtn.addEventListener('click', () => createPage(els.templateSelect.value));
@@ -70,12 +76,10 @@ function bindEvents() {
     if (!activePage) return;
     activePage.dataset.theme = els.themeSelect.value;
     applyThemeMasthead(activePage, els.themeSelect.value);
-    queueLayoutMaintenance();
     queueAutosave();
   });
   els.pageSizeSelect.addEventListener('change', () => {
     updatePageSize(els.pageSizeSelect.value);
-    queueLayoutMaintenance();
     queueAutosave();
   });
 
@@ -83,8 +87,10 @@ function bindEvents() {
   els.documentContainer.addEventListener('focusin', (event) => {
     const page = event.target.closest('.sheet-page');
     if (page) setActivePage(page);
+    const editable = event.target.closest('[contenteditable="true"]');
+    if (editable) lastFocusedEditable = editable;
   });
-  els.documentContainer.addEventListener('input', () => { fitAllHeadlines(els.documentContainer); queueLayoutMaintenance(); queueAutosave(); });
+  els.documentContainer.addEventListener('input', queueAutosave);
   els.documentContainer.addEventListener('paste', handlePlainTextPaste);
 
   els.assetLibraryBtn.addEventListener('click', () => openAssetModal());
@@ -114,6 +120,11 @@ function bindEvents() {
   els.duplicateBlockBtn.addEventListener('click', duplicateActiveBlock);
   els.addImageToBlockBtn.addEventListener('click', addImageSlotToActiveBlock);
   els.applyImageFitBtn.addEventListener('click', applyImageOptions);
+  els.applyFontSizeBtn.addEventListener('click', applyFontSizeOptions);
+  els.fontSmallerBtn.addEventListener('click', () => stepSelectedFontSize(-1));
+  els.fontLargerBtn.addEventListener('click', () => stepSelectedFontSize(1));
+  els.reflowNowBtn.addEventListener('click', () => runLayoutMaintenance({ forcePagination: true }));
+  els.autoFlowToggle.addEventListener('change', () => queueAutosave());
 
   els.documentContainer.addEventListener('dragstart', handleDragStart);
   els.documentContainer.addEventListener('dragover', handleDragOver);
@@ -132,7 +143,6 @@ function createPage(templateName) {
   els.documentContainer.appendChild(page);
   setActivePage(page);
   updatePageNumbers();
-  queueLayoutMaintenance(0);
   queueAutosave();
   return page;
 }
@@ -178,6 +188,7 @@ function setActiveBlock(block) {
     if (parentGrid) setActiveGrid(parentGrid);
     const spanClass = Array.from(activeBlock.classList).find(cls => cls.startsWith('span-')) || 'span-1';
     els.spanSelect.value = ['span-1', 'span-2', 'span-all', 'span-compact'].includes(spanClass) ? spanClass : 'span-1';
+    syncFontControlsFromBlock(activeBlock);
   }
 }
 
@@ -206,6 +217,7 @@ function updatePageSize(sizeName) {
   document.documentElement.style.setProperty('--page-h', `${size.cssHeight}px`);
   els.documentContainer.querySelectorAll('.sheet-page').forEach(page => page.dataset.pageSize = sizeName);
   updatePrintPageSize(size);
+  queueLayoutMaintenance();
 }
 
 function updatePrintPageSize(size) {
@@ -225,7 +237,6 @@ function addSelectedBlock() {
   hydratePage(activePage);
   const added = target.querySelector('.block:last-of-type');
   if (added) setActiveBlock(added);
-  queueLayoutMaintenance();
   queueAutosave();
 }
 
@@ -261,7 +272,6 @@ function applySelectedLayout() {
   const target = activeGrid && activePage.contains(activeGrid) ? activeGrid : activePage.querySelector('.sheet-body');
   setLayoutClass(target, els.layoutSelect.value);
   setActiveGrid(target);
-  queueLayoutMaintenance();
   queueAutosave();
 }
 
@@ -274,7 +284,6 @@ function addLayoutSection() {
   hydratePage(activePage);
   setActiveGrid(section);
   setActiveBlock(section.querySelector('.block'));
-  queueLayoutMaintenance();
   queueAutosave();
 }
 
@@ -282,7 +291,6 @@ function applySelectedSpan() {
   if (!activeBlock) return;
   activeBlock.classList.remove('span-1', 'span-2', 'span-all', 'span-compact');
   activeBlock.classList.add(els.spanSelect.value);
-  queueLayoutMaintenance();
   queueAutosave();
 }
 
@@ -293,7 +301,6 @@ function moveActiveBlock(direction) {
   if (direction < 0) activeBlock.parentElement.insertBefore(activeBlock, sibling);
   else activeBlock.parentElement.insertBefore(sibling, activeBlock);
   activeBlock.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-  queueLayoutMaintenance();
   queueAutosave();
 }
 
@@ -304,7 +311,6 @@ function duplicateActiveBlock() {
   activeBlock.after(clone);
   hydratePage(activePage || clone.closest('.sheet-page'));
   setActiveBlock(clone);
-  queueLayoutMaintenance();
   queueAutosave();
 }
 
@@ -330,7 +336,6 @@ function addImageSlotToActiveBlock() {
   activeBlock.classList.add('image-pos-top');
   imageTarget = frame;
   openAssetModal();
-  queueLayoutMaintenance();
   queueAutosave();
 }
 
@@ -346,9 +351,46 @@ function applyImageOptions() {
     targetBlock.classList.remove('image-pos-top', 'image-pos-left', 'image-pos-right', 'image-pos-hero');
     targetBlock.classList.add(els.imagePositionSelect.value);
   }
-  queueLayoutMaintenance();
   queueAutosave();
 }
+
+
+function applyFontSizeOptions() {
+  const target = activeBlock || lastFocusedEditable?.closest('.block');
+  if (!target) return;
+  const bodySize = clampNumber(Number(els.bodyFontSizeInput.value), 8, 32, 14);
+  const titleSize = clampNumber(Number(els.titleFontSizeInput.value), 12, 88, 25);
+  target.style.setProperty('--block-font-size', `${bodySize}px`);
+  target.style.setProperty('--title-font-size', `${titleSize}px`);
+  target.style.setProperty('--lead-title-font-size', `${Math.max(titleSize, Math.round(titleSize * 1.8))}px`);
+  target.dataset.bodyFontSize = String(bodySize);
+  target.dataset.titleFontSize = String(titleSize);
+  queueAutosave();
+}
+
+function stepSelectedFontSize(delta) {
+  const target = activeBlock || lastFocusedEditable?.closest('.block');
+  if (!target) return;
+  syncFontControlsFromBlock(target);
+  els.bodyFontSizeInput.value = String(clampNumber(Number(els.bodyFontSizeInput.value) + delta, 8, 32, 14));
+  els.titleFontSizeInput.value = String(clampNumber(Number(els.titleFontSizeInput.value) + delta * 2, 12, 88, 25));
+  applyFontSizeOptions();
+}
+
+function syncFontControlsFromBlock(block) {
+  if (!block || !els.bodyFontSizeInput || !els.titleFontSizeInput) return;
+  const computed = getComputedStyle(block);
+  const body = parseFloat(block.dataset.bodyFontSize || computed.getPropertyValue('--block-font-size')) || 14;
+  const title = parseFloat(block.dataset.titleFontSize || computed.getPropertyValue('--title-font-size')) || (block.classList.contains('lead-block') ? 52 : 25);
+  els.bodyFontSizeInput.value = String(Math.round(clampNumber(body, 8, 32, 14)));
+  els.titleFontSizeInput.value = String(Math.round(clampNumber(title, 12, 88, 25)));
+}
+
+function clampNumber(value, min, max, fallback) {
+  if (!Number.isFinite(value)) return fallback;
+  return Math.min(max, Math.max(min, value));
+}
+
 
 function handleDocumentClick(event) {
   const page = event.target.closest('.sheet-page');
@@ -439,7 +481,6 @@ function handleDrop(event) {
   else container.appendChild(draggedBlock);
   setActiveGrid(container);
   setActiveBlock(draggedBlock);
-  queueLayoutMaintenance();
   queueAutosave();
 }
 
@@ -554,7 +595,6 @@ function selectAsset(src, name) {
   const empty = imageTarget.querySelector('.empty-label');
   if (empty) empty.style.display = 'none';
   closeAssetModal();
-  queueLayoutMaintenance();
   queueAutosave();
 }
 
@@ -577,7 +617,7 @@ async function handleAssetUpload(event) {
 function buildProjectData() {
   return {
     app: 'cyberpunk-red-screamsheet-generator',
-    version: 3,
+    version: 4,
     savedAt: new Date().toISOString(),
     pageSize: els.pageSizeSelect.value,
     activeTheme: els.themeSelect.value,
@@ -616,7 +656,6 @@ function loadProjectData(data, { silent = false } = {}) {
   const firstPage = els.documentContainer.querySelector('.sheet-page');
   if (firstPage) setActivePage(firstPage);
   updatePageNumbers();
-  queueLayoutMaintenance(0);
   queueAutosave();
 }
 
@@ -632,25 +671,203 @@ function sanitizeProjectHtml(html) {
       if ((name === 'href' || name === 'src') && /^javascript:/i.test(value)) el.removeAttribute(attr.name);
     });
   });
-  doc.querySelectorAll('.selected-block, .selected-grid, .dragging, .drag-over').forEach(el => el.classList.remove('selected-block', 'selected-grid', 'dragging', 'drag-over'));
+  doc.querySelectorAll('.selected-block, .selected-grid, .dragging, .drag-over, .flow-warning').forEach(el => el.classList.remove('selected-block', 'selected-grid', 'dragging', 'drag-over', 'flow-warning'));
+  doc.querySelectorAll('.flow-note').forEach(el => el.remove());
   return doc.querySelector('main').innerHTML;
 }
 
-function queueLayoutMaintenance(delay = 700) {
-  clearTimeout(layoutTimer);
-  layoutTimer = setTimeout(() => maintainReadableLayout(els.documentContainer), delay);
+function queueAutosave() {
+  queueLayoutMaintenance();
+  clearTimeout(autosaveTimer);
+  autosaveTimer = setTimeout(() => saveAutosave(buildProjectData()), 900);
 }
 
-function queueAutosave() {
-  clearTimeout(autosaveTimer);
-  autosaveTimer = setTimeout(() => {
-    maintainReadableLayout(els.documentContainer);
-    saveAutosave(buildProjectData());
-  }, 650);
+function queueLayoutMaintenance() {
+  clearTimeout(layoutMaintenanceTimer);
+  layoutMaintenanceTimer = setTimeout(() => runLayoutMaintenance(), 260);
 }
+
+function runLayoutMaintenance({ forcePagination = false } = {}) {
+  fitHeadlines(els.documentContainer);
+  if (forcePagination || els.autoFlowToggle?.checked) paginateOverflow();
+  updatePageNumbers();
+}
+
+function fitHeadlines(root = document) {
+  const titles = root.querySelectorAll('.lead-article h1, .article h2, .hero-overlay h2, .mission-cover h1');
+  titles.forEach(title => {
+    const block = title.closest('.block');
+    const computedBlock = block ? getComputedStyle(block) : getComputedStyle(title);
+    const base = parseFloat(block?.dataset.titleFontSize || computedBlock.getPropertyValue('--title-font-size')) || parseFloat(getComputedStyle(title).fontSize) || 25;
+    const multiplier = title.matches('.lead-article h1, .mission-cover h1') ? 1.85 : title.matches('.hero-overlay h2') ? 1.35 : 1;
+    const maxSize = clampNumber(base * multiplier, 14, title.matches('.lead-article h1, .mission-cover h1') ? 88 : 54, 25);
+    const minSize = title.matches('.lead-article h1, .mission-cover h1') ? 24 : 14;
+    title.style.fontSize = `${maxSize}px`;
+    title.style.overflowWrap = 'anywhere';
+    title.style.maxWidth = '100%';
+    let size = maxSize;
+    let guard = 0;
+    while (guard < 40 && size > minSize && (title.scrollWidth > title.clientWidth + 1 || title.scrollHeight > Math.max(title.clientHeight + 1, title.getBoundingClientRect().height + 1))) {
+      size -= 1.5;
+      title.style.fontSize = `${size}px`;
+      guard += 1;
+    }
+  });
+}
+
+function paginateOverflow() {
+  if (isPaginating) return;
+  isPaginating = true;
+  try {
+    let guard = 0;
+    while (guard < 90) {
+      guard += 1;
+      const page = Array.from(els.documentContainer.querySelectorAll('.sheet-page')).find(pageOverflows);
+      if (!page) break;
+      const changed = pushOverflowFromPage(page);
+      if (!changed) {
+        markPageOverflow(page);
+        break;
+      }
+    }
+  } finally {
+    isPaginating = false;
+  }
+}
+
+function pageOverflows(page) {
+  const body = page.querySelector('.sheet-body');
+  if (!body) return false;
+  return body.scrollHeight > body.clientHeight + 6;
+}
+
+function pushOverflowFromPage(page) {
+  const block = findLastMovableBlock(page);
+  if (!block) return false;
+  const parent = block.parentElement;
+  const parentColumns = getGridColumnCount(parent);
+  const canSplit = isSplittableBlock(block);
+
+  if (canSplit && parentColumns > 1 && !block.classList.contains('flow-continuation') && !block.nextElementSibling) {
+    const continuation = splitBlock(block, { samePage: true });
+    if (continuation) {
+      block.after(continuation);
+      hydratePage(page);
+      return true;
+    }
+  }
+
+  if (canSplit) {
+    const continuation = splitBlock(block, { samePage: false });
+    if (continuation) {
+      const target = getContinuationTarget(page, parent);
+      target.prepend(continuation);
+      hydratePage(target.closest('.sheet-page'));
+      return true;
+    }
+  }
+
+  const target = getContinuationTarget(page, parent);
+  target.prepend(block);
+  hydratePage(target.closest('.sheet-page'));
+  return true;
+}
+
+function findLastMovableBlock(page) {
+  const blocks = Array.from(page.querySelectorAll('.sheet-body .block')).filter(block => !block.closest('.mission-cover'));
+  return blocks.reverse().find(block => block.offsetParent !== null) || null;
+}
+
+function isSplittableBlock(block) {
+  return Boolean(getSplittableContent(block));
+}
+
+function getSplittableContent(block) {
+  return block.querySelector('.article-body, .briefs-box .editable-block, .qa-box .editable-block, .timeline-box .editable-block, .gm-box .editable-block');
+}
+
+function splitBlock(block, { samePage }) {
+  const content = getSplittableContent(block);
+  if (!content) return null;
+  const movableNodes = Array.from(content.childNodes).filter(node => node.nodeType === Node.ELEMENT_NODE || (node.nodeType === Node.TEXT_NODE && node.textContent.trim()));
+  const clone = block.cloneNode(true);
+  clone.classList.remove('selected-block', 'dragging', 'drag-over');
+  clone.classList.add('flow-continuation');
+  clone.querySelectorAll('.block-drag').forEach(el => el.remove());
+  const cloneContent = getSplittableContent(clone);
+  if (!cloneContent) return null;
+  cloneContent.innerHTML = '';
+
+  const title = clone.querySelector('.lead-article h1, .article h2, .block-title');
+  if (title && !/continued/i.test(title.textContent)) title.textContent = `${title.textContent.trim()} — continued`;
+
+  if (movableNodes.length > 1) {
+    const moveCount = samePage ? Math.max(1, Math.floor(movableNodes.length / 2)) : Math.max(1, Math.ceil(movableNodes.length / 2));
+    const toMove = movableNodes.slice(-moveCount);
+    toMove.forEach(node => cloneContent.appendChild(node));
+    if (!content.textContent.trim() || !cloneContent.textContent.trim()) return null;
+    return clone;
+  }
+
+  const text = content.textContent.trim();
+  const words = text.split(/\s+/).filter(Boolean);
+  if (words.length < 30) return null;
+  const splitAt = Math.max(12, Math.floor(words.length * (samePage ? 0.55 : 0.5)));
+  const first = words.slice(0, splitAt).join(' ');
+  const second = words.slice(splitAt).join(' ');
+  content.textContent = first;
+  cloneContent.textContent = second;
+  return clone;
+}
+
+function getContinuationTarget(sourcePage, sourceContainer) {
+  const nextPage = getOrCreateNextPage(sourcePage);
+  const nextBody = nextPage.querySelector('.sheet-body');
+  const layout = getLayoutClass(sourceContainer) || 'grid-1';
+  if (sourceContainer.matches('.sheet-body')) return nextBody;
+  let section = nextBody.querySelector(`.sheet-grid.${layout}.flow-target`);
+  if (!section) {
+    section = document.createElement('section');
+    section.className = `sheet-grid drop-container flow-target ${layout}`;
+    nextBody.prepend(section);
+  }
+  return section;
+}
+
+function getOrCreateNextPage(page) {
+  const next = page.nextElementSibling;
+  if (next?.classList?.contains('sheet-page')) return next;
+  const created = els.pageTemplate.content.firstElementChild.cloneNode(true);
+  created.dataset.theme = page.dataset.theme || els.themeSelect.value || 'nct';
+  created.dataset.pageSize = page.dataset.pageSize || els.pageSizeSelect.value || 'cyberpunk';
+  created.querySelector('.sheet-body').innerHTML = '';
+  applyThemeMasthead(created, created.dataset.theme);
+  page.after(created);
+  hydratePage(created);
+  updatePageNumbers();
+  return created;
+}
+
+function getGridColumnCount(container) {
+  const cls = getLayoutClass(container) || 'grid-1';
+  if (cls === 'grid-3' || cls === 'grid-bottom-cards') return 3;
+  if (cls === 'grid-2' || cls === 'grid-sidebar-left' || cls === 'grid-sidebar-right' || cls === 'grid-feature' || cls === 'grid-map') return 2;
+  return 1;
+}
+
+function markPageOverflow(page) {
+  page.classList.add('flow-warning');
+  if (!page.querySelector('.flow-note')) {
+    const note = document.createElement('span');
+    note.className = 'flow-note control-only';
+    note.textContent = 'Overflow could not be fully resolved. Reduce font size, image height, or block count.';
+    page.querySelector('.sheet-body')?.appendChild(note);
+  }
+}
+
 
 async function exportPdf() {
-  maintainReadableLayout(els.documentContainer);
+  runLayoutMaintenance({ forcePagination: true });
   const pages = Array.from(els.documentContainer.querySelectorAll('.sheet-page'));
   if (!pages.length) return;
   const oldText = els.downloadPdfBtn.textContent;

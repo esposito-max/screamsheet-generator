@@ -128,6 +128,31 @@
       </div>
     </div>
 
+
+
+    <div class="toolbar-group font-toolbar">
+      <label for="body-font-size-input">Font size</label>
+      <div class="font-size-row">
+        <span>Body</span>
+        <input id="body-font-size-input" type="number" min="8" max="32" step="1" value="14" aria-label="Body font size in pixels" />
+        <span>Title</span>
+        <input id="title-font-size-input" type="number" min="12" max="88" step="1" value="25" aria-label="Title font size in pixels" />
+      </div>
+      <div class="mini-button-row">
+        <button id="apply-font-size-btn" type="button">Apply Font</button>
+        <button id="font-smaller-btn" type="button">A−</button>
+        <button id="font-larger-btn" type="button">A+</button>
+      </div>
+    </div>
+
+    <div class="toolbar-group flow-toolbar">
+      <label for="auto-flow-toggle">Overflow</label>
+      <label class="inline-check"><input id="auto-flow-toggle" type="checkbox" checked /> Auto columns/pages</label>
+      <div class="mini-button-row">
+        <button id="reflow-now-btn" type="button">Reflow Now</button>
+      </div>
+    </div>
+
     <div class="toolbar-actions">
       <button id="asset-library-btn" type="button">Assets</button>
       <button id="save-project-btn" type="button">Save Project</button>
