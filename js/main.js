@@ -41,6 +41,17 @@ const els = {
   fontLargerBtn: document.getElementById('font-larger-btn'),
   autoFlowToggle: document.getElementById('auto-flow-toggle'),
   reflowNowBtn: document.getElementById('reflow-now-btn'),
+  blockXInput: document.getElementById('block-x-input'),
+  blockYInput: document.getElementById('block-y-input'),
+  blockWInput: document.getElementById('block-w-input'),
+  blockHInput: document.getElementById('block-h-input'),
+  applyPositionBtn: document.getElementById('apply-position-btn'),
+  bringForwardBtn: document.getElementById('bring-forward-btn'),
+  sendBackwardBtn: document.getElementById('send-backward-btn'),
+  snapGridToggle: document.getElementById('snap-grid-toggle'),
+  lockBlockToggle: document.getElementById('lock-block-toggle'),
+  autoMarkdownToggle: document.getElementById('auto-markdown-toggle'),
+  applyMarkdownBtn: document.getElementById('apply-markdown-btn'),
   exportStatus: document.getElementById('export-status')
 };
 
@@ -53,6 +64,7 @@ let autosaveTimer = null;
 let layoutMaintenanceTimer = null;
 let isPaginating = false;
 let lastFocusedEditable = null;
+let freePointerState = null;
 
 init();
 
@@ -92,6 +104,8 @@ function bindEvents() {
   });
   els.documentContainer.addEventListener('input', queueAutosave);
   els.documentContainer.addEventListener('paste', handlePlainTextPaste);
+  els.documentContainer.addEventListener('focusout', handleEditableBlur);
+  els.documentContainer.addEventListener('pointerdown', handleFreePointerDown);
 
   els.assetLibraryBtn.addEventListener('click', () => openAssetModal());
   els.assetModalClose.addEventListener('click', closeAssetModal);
@@ -125,6 +139,11 @@ function bindEvents() {
   els.fontLargerBtn.addEventListener('click', () => stepSelectedFontSize(1));
   els.reflowNowBtn.addEventListener('click', () => runLayoutMaintenance({ forcePagination: true }));
   els.autoFlowToggle.addEventListener('change', () => queueAutosave());
+  els.applyPositionBtn?.addEventListener('click', applyFreeLayoutInputs);
+  els.bringForwardBtn?.addEventListener('click', () => stepBlockZIndex(1));
+  els.sendBackwardBtn?.addEventListener('click', () => stepBlockZIndex(-1));
+  els.lockBlockToggle?.addEventListener('change', applyLockState);
+  els.applyMarkdownBtn?.addEventListener('click', applyMarkdownToSelection);
 
   els.documentContainer.addEventListener('dragstart', handleDragStart);
   els.documentContainer.addEventListener('dragover', handleDragOver);
@@ -189,8 +208,10 @@ function setActiveBlock(block) {
     const spanClass = Array.from(activeBlock.classList).find(cls => cls.startsWith('span-')) || 'span-1';
     els.spanSelect.value = ['span-1', 'span-2', 'span-all', 'span-compact'].includes(spanClass) ? spanClass : 'span-1';
     syncFontControlsFromBlock(activeBlock);
+    syncFreeControlsFromBlock(activeBlock);
   }
 }
+
 
 function setActiveGrid(grid) {
   if (!grid) return;
@@ -236,6 +257,7 @@ function addSelectedBlock() {
   target.insertAdjacentHTML('beforeend', createBlock(els.blockSelect.value));
   hydratePage(activePage);
   const added = target.querySelector('.block:last-of-type');
+  if (added && isFreeLayoutContainer(target)) placeBlockInFreeLayout(added, target);
   if (added) setActiveBlock(added);
   queueAutosave();
 }
@@ -254,16 +276,25 @@ function hydratePage(page) {
       drag.textContent = '☰';
       block.prepend(drag);
     }
+    if (!block.querySelector('.block-resize')) {
+      const resize = document.createElement('button');
+      resize.className = 'block-resize control-only';
+      resize.type = 'button';
+      resize.title = 'Resize block';
+      resize.setAttribute('aria-label', 'Resize block');
+      resize.textContent = '◢';
+      block.append(resize);
+    }
   });
   page.querySelectorAll('.sheet-grid, .sheet-body').forEach(grid => grid.classList.add('drop-container'));
 }
 
 function getLayoutClass(el) {
-  return Array.from(el.classList || []).find(cls => cls.startsWith('grid-'));
+  return Array.from(el.classList || []).find(cls => cls.startsWith('grid-') || cls === 'free-layout');
 }
 
 function setLayoutClass(el, layoutClass) {
-  el.classList.remove('grid-1', 'grid-2', 'grid-3', 'grid-sidebar-left', 'grid-sidebar-right', 'grid-feature', 'grid-bottom-cards', 'grid-map');
+  el.classList.remove('grid-1', 'grid-2', 'grid-3', 'grid-sidebar-left', 'grid-sidebar-right', 'grid-feature', 'grid-bottom-cards', 'grid-map', 'free-layout');
   el.classList.add('sheet-grid', layoutClass);
 }
 
@@ -271,6 +302,7 @@ function applySelectedLayout() {
   if (!activePage) return;
   const target = activeGrid && activePage.contains(activeGrid) ? activeGrid : activePage.querySelector('.sheet-body');
   setLayoutClass(target, els.layoutSelect.value);
+  if (els.layoutSelect.value === 'free-layout') initializeFreeLayout(target);
   setActiveGrid(target);
   queueAutosave();
 }
@@ -282,6 +314,7 @@ function addLayoutSection() {
   section.innerHTML = createBlock(els.blockSelect.value || 'article');
   activePage.querySelector('.sheet-body').appendChild(section);
   hydratePage(activePage);
+  if (section.classList.contains('free-layout')) initializeFreeLayout(section);
   setActiveGrid(section);
   setActiveBlock(section.querySelector('.block'));
   queueAutosave();
@@ -392,6 +425,208 @@ function clampNumber(value, min, max, fallback) {
 }
 
 
+function isFreeLayoutContainer(container) {
+  return Boolean(container?.classList?.contains('free-layout'));
+}
+
+function isFreeLayoutBlock(block) {
+  return Boolean(block?.parentElement?.classList?.contains('free-layout'));
+}
+
+function getSnapValue() {
+  return els.snapGridToggle?.checked ? 10 : 1;
+}
+
+function snapNumber(value, snap = getSnapValue()) {
+  return Math.round(value / snap) * snap;
+}
+
+function readBlockBox(block) {
+  return {
+    x: parseFloat(block.dataset.freeX || block.style.getPropertyValue('--free-x')) || 0,
+    y: parseFloat(block.dataset.freeY || block.style.getPropertyValue('--free-y')) || 0,
+    w: parseFloat(block.dataset.freeW || block.style.getPropertyValue('--free-w')) || block.offsetWidth || 260,
+    h: parseFloat(block.dataset.freeH || block.style.getPropertyValue('--free-h')) || block.offsetHeight || 170
+  };
+}
+
+function writeBlockBox(block, box) {
+  const clean = {
+    x: Math.round(box.x),
+    y: Math.round(box.y),
+    w: Math.round(box.w),
+    h: Math.round(box.h)
+  };
+  block.dataset.freeX = String(clean.x);
+  block.dataset.freeY = String(clean.y);
+  block.dataset.freeW = String(clean.w);
+  block.dataset.freeH = String(clean.h);
+  block.style.setProperty('--free-x', `${clean.x}px`);
+  block.style.setProperty('--free-y', `${clean.y}px`);
+  block.style.setProperty('--free-w', `${clean.w}px`);
+  block.style.setProperty('--free-h', `${clean.h}px`);
+}
+
+function clampBoxToContainer(box, container) {
+  const width = Math.max(80, container.clientWidth || 640);
+  const height = Math.max(80, container.clientHeight || 740);
+  const w = clampNumber(box.w, 80, width, 260);
+  const h = clampNumber(box.h, 60, height, 170);
+  return {
+    x: clampNumber(box.x, 0, Math.max(0, width - w), 0),
+    y: clampNumber(box.y, 0, Math.max(0, height - h), 0),
+    w,
+    h
+  };
+}
+
+function boxesOverlap(a, b) {
+  return !(a.x + a.w <= b.x || b.x + b.w <= a.x || a.y + a.h <= b.y || b.y + b.h <= a.y);
+}
+
+function wouldOverlap(block, candidate) {
+  const container = block.parentElement;
+  if (!isFreeLayoutContainer(container)) return false;
+  return Array.from(container.children).some(other => {
+    if (other === block || !other.classList?.contains('block')) return false;
+    return boxesOverlap(candidate, readBlockBox(other));
+  });
+}
+
+function applyCandidateBox(block, candidate, { allowOverlap = false } = {}) {
+  const container = block.parentElement;
+  if (!isFreeLayoutContainer(container)) return false;
+  const box = clampBoxToContainer(candidate, container);
+  if (!allowOverlap && wouldOverlap(block, box)) {
+    block.classList.add('free-collision');
+    return false;
+  }
+  block.classList.remove('free-collision');
+  writeBlockBox(block, box);
+  syncFreeControlsFromBlock(block);
+  return true;
+}
+
+function initializeFreeLayout(container) {
+  if (!container) return;
+  container.querySelectorAll(':scope > .block').forEach((block, index) => {
+    if (!block.dataset.freeW) {
+      const col = index % 2;
+      const row = Math.floor(index / 2);
+      applyCandidateBox(block, {
+        x: 10 + col * 280,
+        y: 10 + row * 190,
+        w: 260,
+        h: 170
+      }, { allowOverlap: true });
+    }
+  });
+}
+
+function placeBlockInFreeLayout(block, container) {
+  const baseW = Math.min(300, Math.max(180, (container.clientWidth || 640) / 2 - 20));
+  const baseH = block.classList.contains('lead-block') ? 230 : block.classList.contains('hero-image-block') ? 260 : 170;
+  const snap = getSnapValue();
+  for (let y = 10; y < (container.clientHeight || 760) - baseH; y += snap * 2) {
+    for (let x = 10; x < (container.clientWidth || 640) - baseW; x += snap * 2) {
+      const candidate = { x, y, w: baseW, h: baseH };
+      if (!wouldOverlap(block, candidate)) {
+        writeBlockBox(block, candidate);
+        return;
+      }
+    }
+  }
+  writeBlockBox(block, { x: 10, y: 10, w: baseW, h: baseH });
+}
+
+function syncFreeControlsFromBlock(block) {
+  if (!block || !els.blockXInput) return;
+  const box = readBlockBox(block);
+  els.blockXInput.value = String(Math.round(box.x));
+  els.blockYInput.value = String(Math.round(box.y));
+  els.blockWInput.value = String(Math.round(box.w));
+  els.blockHInput.value = String(Math.round(box.h));
+  if (els.lockBlockToggle) els.lockBlockToggle.checked = block.classList.contains('block-locked');
+}
+
+function applyFreeLayoutInputs() {
+  if (!activeBlock || !isFreeLayoutBlock(activeBlock)) {
+    alert('Select a block inside a Free layout section first.');
+    return;
+  }
+  const snap = getSnapValue();
+  const candidate = {
+    x: snapNumber(Number(els.blockXInput.value), snap),
+    y: snapNumber(Number(els.blockYInput.value), snap),
+    w: snapNumber(Number(els.blockWInput.value), snap),
+    h: snapNumber(Number(els.blockHInput.value), snap)
+  };
+  if (!applyCandidateBox(activeBlock, candidate)) alert('That box would overlap another block. Move or resize it differently.');
+  queueAutosave();
+}
+
+function stepBlockZIndex(delta) {
+  if (!activeBlock || !isFreeLayoutBlock(activeBlock)) return;
+  const current = Number(activeBlock.style.zIndex || activeBlock.dataset.zIndex || 1);
+  const next = clampNumber(current + delta, 1, 99, 1);
+  activeBlock.style.zIndex = String(next);
+  activeBlock.dataset.zIndex = String(next);
+  queueAutosave();
+}
+
+function applyLockState() {
+  if (!activeBlock) return;
+  activeBlock.classList.toggle('block-locked', Boolean(els.lockBlockToggle?.checked));
+  queueAutosave();
+}
+
+function handleFreePointerDown(event) {
+  const dragHandle = event.target.closest('.block-drag');
+  const resizeHandle = event.target.closest('.block-resize');
+  const handle = dragHandle || resizeHandle;
+  if (!handle) return;
+  const block = handle.closest('.block');
+  if (!block || !isFreeLayoutBlock(block)) return;
+  event.preventDefault();
+  if (block.classList.contains('block-locked')) return;
+  setActiveBlock(block);
+  const start = readBlockBox(block);
+  freePointerState = {
+    block,
+    mode: resizeHandle ? 'resize' : 'move',
+    startX: event.clientX,
+    startY: event.clientY,
+    startBox: start,
+    lastGood: start
+  };
+  block.setPointerCapture?.(event.pointerId);
+  window.addEventListener('pointermove', handleFreePointerMove);
+  window.addEventListener('pointerup', handleFreePointerUp, { once: true });
+}
+
+function handleFreePointerMove(event) {
+  if (!freePointerState) return;
+  const { block, mode, startX, startY, startBox } = freePointerState;
+  const snap = getSnapValue();
+  const dx = event.clientX - startX;
+  const dy = event.clientY - startY;
+  const candidate = mode === 'move'
+    ? { ...startBox, x: snapNumber(startBox.x + dx, snap), y: snapNumber(startBox.y + dy, snap) }
+    : { ...startBox, w: snapNumber(startBox.w + dx, snap), h: snapNumber(startBox.h + dy, snap) };
+  if (applyCandidateBox(block, candidate)) freePointerState.lastGood = readBlockBox(block);
+}
+
+function handleFreePointerUp() {
+  if (freePointerState?.block) {
+    freePointerState.block.classList.remove('free-collision');
+    syncFreeControlsFromBlock(freePointerState.block);
+  }
+  freePointerState = null;
+  window.removeEventListener('pointermove', handleFreePointerMove);
+  queueAutosave();
+}
+
+
 function handleDocumentClick(event) {
   const page = event.target.closest('.sheet-page');
   if (page) setActivePage(page);
@@ -451,7 +686,7 @@ function handleDocumentClick(event) {
 function handleDragStart(event) {
   const handle = event.target.closest('.block-drag');
   const block = handle?.closest('.block');
-  if (!block) {
+  if (!block || isFreeLayoutBlock(block)) {
     event.preventDefault();
     return;
   }
@@ -479,6 +714,7 @@ function handleDrop(event) {
   const after = getBlockAfterPointer(container, event.clientY);
   if (after) container.insertBefore(draggedBlock, after);
   else container.appendChild(draggedBlock);
+  if (isFreeLayoutContainer(container)) placeBlockInFreeLayout(draggedBlock, container);
   setActiveGrid(container);
   setActiveBlock(draggedBlock);
   queueAutosave();
@@ -512,7 +748,14 @@ function handlePlainTextPaste(event) {
   if (!editable) return;
   event.preventDefault();
   const text = (event.clipboardData || window.clipboardData).getData('text/plain');
-  insertTextAtCursor(text);
+  if (els.autoMarkdownToggle?.checked && looksLikeMarkdown(text)) insertHtmlAtCursor(markdownToHtml(text, { inlineOnly: isInlineEditable(editable) }));
+  else insertTextAtCursor(text);
+}
+
+function handleEditableBlur(event) {
+  const editable = event.target.closest('[contenteditable="true"]');
+  if (!editable || !els.autoMarkdownToggle?.checked) return;
+  applyMarkdownToEditable(editable);
 }
 
 function insertTextAtCursor(text) {
@@ -527,6 +770,136 @@ function insertTextAtCursor(text) {
   });
   selection.getRangeAt(0).insertNode(fragment);
   selection.collapseToEnd();
+}
+
+function insertHtmlAtCursor(html) {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0) return;
+  selection.deleteFromDocument();
+  const template = document.createElement('template');
+  template.innerHTML = sanitizeMarkdownHtml(html);
+  selection.getRangeAt(0).insertNode(template.content);
+  selection.collapseToEnd();
+}
+
+function isInlineEditable(editable) {
+  return editable.matches('h1, h2, h3, .headline, .block-title, .kicker, .byline, .caption, .timestamp') || Boolean(editable.closest('.issue-bar, .sheet-footer'));
+}
+
+function applyMarkdownToSelection() {
+  if (lastFocusedEditable) {
+    applyMarkdownToEditable(lastFocusedEditable, { force: true });
+    return;
+  }
+  const target = activeBlock || activePage;
+  if (!target) return;
+  target.querySelectorAll('[contenteditable="true"]').forEach(el => applyMarkdownToEditable(el, { force: true }));
+}
+
+function applyMarkdownToEditable(editable, { force = false } = {}) {
+  if (!editable) return;
+  const text = editable.innerText || editable.textContent || '';
+  if (!force && !looksLikeMarkdown(text)) return;
+  editable.innerHTML = markdownToHtml(text, { inlineOnly: isInlineEditable(editable) });
+  editable.classList.add('markdown-applied');
+  setTimeout(() => editable.classList.remove('markdown-applied'), 800);
+  queueAutosave();
+}
+
+function looksLikeMarkdown(text) {
+  return /(^|\s)(#{1,3}\s|[-*+]\s|\d+\.\s|>\s|\*\*[^*]+\*\*|__[^_]+__|\*[^*]+\*|_[^_]+_|~~[^~]+~~|`[^`]+`|\[[^\]]+\]\([^\)]+\))/m.test(text || '');
+}
+
+function markdownToHtml(text, { inlineOnly = false } = {}) {
+  const normalized = String(text || '').replace(/\r\n/g, '\n').trim();
+  if (!normalized) return '';
+  if (inlineOnly) return inlineMarkdown(stripHeadingMarker(normalized).replace(/\n+/g, ' '));
+  const lines = normalized.split('\n');
+  const out = [];
+  let listType = null;
+  let listItems = [];
+  const flushList = () => {
+    if (!listType) return;
+    out.push(`<${listType}>${listItems.map(item => `<li>${inlineMarkdown(item)}</li>`).join('')}</${listType}>`);
+    listType = null;
+    listItems = [];
+  };
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line) { flushList(); continue; }
+    let match = line.match(/^(#{1,3})\s+(.+)$/);
+    if (match) {
+      flushList();
+      const level = Math.min(4, match[1].length + 1);
+      out.push(`<h${level}>${inlineMarkdown(match[2])}</h${level}>`);
+      continue;
+    }
+    match = line.match(/^[-*+]\s+(.+)$/);
+    if (match) {
+      if (listType !== 'ul') flushList();
+      listType = 'ul';
+      listItems.push(match[1]);
+      continue;
+    }
+    match = line.match(/^\d+\.\s+(.+)$/);
+    if (match) {
+      if (listType !== 'ol') flushList();
+      listType = 'ol';
+      listItems.push(match[1]);
+      continue;
+    }
+    match = line.match(/^>\s+(.+)$/);
+    if (match) {
+      flushList();
+      out.push(`<blockquote>${inlineMarkdown(match[1])}</blockquote>`);
+      continue;
+    }
+    flushList();
+    out.push(`<p>${inlineMarkdown(line)}</p>`);
+  }
+  flushList();
+  return sanitizeMarkdownHtml(out.join(''));
+}
+
+function stripHeadingMarker(text) {
+  return String(text || '').replace(/^#{1,6}\s+/, '');
+}
+
+function inlineMarkdown(text) {
+  let html = escapeHtml(text);
+  html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+  html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  html = html.replace(/__([^_]+)__/g, '<strong>$1</strong>');
+  html = html.replace(/~~([^~]+)~~/g, '<s>$1</s>');
+  html = html.replace(/(^|\s)\*([^*]+)\*/g, '$1<em>$2</em>');
+  html = html.replace(/(^|\s)_([^_]+)_/g, '$1<em>$2</em>');
+  html = html.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+|mailto:[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+  return html;
+}
+
+function escapeHtml(text) {
+  return String(text || '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
+}
+
+function sanitizeMarkdownHtml(html) {
+  const template = document.createElement('template');
+  template.innerHTML = html;
+  const allowed = new Set(['P','BR','STRONG','EM','S','CODE','A','UL','OL','LI','H2','H3','H4','BLOCKQUOTE']);
+  template.content.querySelectorAll('*').forEach(el => {
+    if (!allowed.has(el.tagName)) {
+      el.replaceWith(document.createTextNode(el.textContent || ''));
+      return;
+    }
+    Array.from(el.attributes).forEach(attr => {
+      const name = attr.name.toLowerCase();
+      if (el.tagName === 'A' && ['href','target','rel'].includes(name)) {
+        if (name === 'href' && !/^(https?:\/\/|mailto:)/i.test(attr.value)) el.removeAttribute(attr.name);
+        return;
+      }
+      el.removeAttribute(attr.name);
+    });
+  });
+  return template.innerHTML;
 }
 
 function openAssetModal() {
@@ -617,7 +990,7 @@ async function handleAssetUpload(event) {
 function buildProjectData() {
   return {
     app: 'cyberpunk-red-screamsheet-generator',
-    version: 4,
+    version: 5,
     savedAt: new Date().toISOString(),
     pageSize: els.pageSizeSelect.value,
     activeTheme: els.themeSelect.value,
@@ -737,7 +1110,7 @@ function paginateOverflow() {
 
 function pageOverflows(page) {
   const body = page.querySelector('.sheet-body');
-  if (!body) return false;
+  if (!body || body.classList.contains('free-layout')) return false;
   return body.scrollHeight > body.clientHeight + 6;
 }
 
