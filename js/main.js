@@ -507,6 +507,7 @@ function writeBlockBox(block, box) {
   const container = block.parentElement;
   if (isPositionableContainer(container)) container.classList.add('manual-canvas');
   block.classList.add('manual-positioned');
+  delete block.dataset.pageOverflowLocked;
   const clean = {
     x: Math.round(box.x),
     y: Math.round(box.y),
@@ -1192,18 +1193,65 @@ function paginateOverflow() {
 function pageOverflows(page) {
   const body = page.querySelector('.sheet-body');
   if (!body) return false;
-  return body.scrollHeight > body.clientHeight + 6 || Boolean(findOverflowingBlock(page));
+  if (findOverflowingBlock(page)) return true;
+
+  // When any block has been manually positioned, the container may receive a
+  // calculated min-height. Using scrollHeight in that state creates a false
+  // page overflow signal and can repeatedly split the same block. Instead,
+  // check the actual rendered block geometry against the page body boundary.
+  if (pageHasManualGeometry(page)) return Boolean(findPageOverflowBlock(page));
+
+  return body.scrollHeight > body.clientHeight + 6;
+}
+
+function pageHasManualGeometry(page) {
+  const body = page.querySelector('.sheet-body');
+  if (!body) return false;
+  return Boolean(body.classList.contains('manual-canvas') ||
+    body.classList.contains('free-layout') ||
+    body.querySelector('.manual-canvas, .free-layout, .block.manual-positioned, .block[data-free-w]'));
+}
+
+function isVisibleBlock(block) {
+  return Boolean(block && block.classList?.contains('block') && block.offsetParent !== null && !block.closest('.mission-cover'));
+}
+
+function findPageOverflowBlock(page) {
+  const body = page.querySelector('.sheet-body');
+  if (!body) return null;
+  const bodyRect = body.getBoundingClientRect();
+  const blocks = Array.from(body.querySelectorAll('.block')).filter(block => isVisibleBlock(block) && block.dataset.pageOverflowLocked !== 'true');
+  return blocks.reverse().find(block => {
+    const rect = block.getBoundingClientRect();
+    return rect.bottom > bodyRect.bottom - 6 || rect.right > bodyRect.right + 2;
+  }) || null;
+}
+
+function blockFitsWithinPageBody(block) {
+  const page = block.closest('.sheet-page');
+  const body = page?.querySelector('.sheet-body');
+  if (!body) return true;
+  const bodyRect = body.getBoundingClientRect();
+  const rect = block.getBoundingClientRect();
+  return rect.bottom <= bodyRect.bottom - 6 && rect.right <= bodyRect.right + 2;
 }
 
 function pushOverflowFromPage(page) {
   const overflowing = findOverflowingBlock(page);
   if (overflowing) return continueOverflowingBlock(overflowing);
 
+  // Physical page overflow is different from text overflow. If a manually
+  // positioned block sits beyond the printable body, move that whole block to
+  // the next safe page instead of splitting its text. Splitting a block whose
+  // content is not overflowing was the cause of runaway continuation copies.
+  const geometricOverflow = findPageOverflowBlock(page);
+  if (geometricOverflow) return moveOverflowingBlockToNextPage(geometricOverflow);
+
   const block = findLastMovableBlock(page);
   if (!block) return false;
   const parent = block.parentElement;
   const parentColumns = getGridColumnCount(parent);
-  const canSplit = isSplittableBlock(block);
+  const canSplit = isSplittableBlock(block) && blockContentOverflows(block);
 
   if (canSplit && parentColumns > 1 && !isFreeLayoutBlock(block) && !block.classList.contains('flow-continuation') && !block.nextElementSibling) {
     const continuation = splitBlock(block, { samePage: true });
@@ -1219,21 +1267,38 @@ function pushOverflowFromPage(page) {
     if (continuation) return placeContinuation(block, continuation);
   }
 
+  return false;
+}
+
+function moveOverflowingBlockToNextPage(block) {
+  if (!block || block.classList.contains('block-locked')) return false;
+  const page = block.closest('.sheet-page');
+  const parent = block.parentElement;
+  if (!page || !parent) return false;
   const target = getContinuationTarget(page, parent);
-  if (isFreeLayoutContainer(parent) || parent.classList.contains('manual-canvas')) {
-    const oldBox = readBlockBox(block);
-    target.prepend(block);
-    hydratePage(target.closest('.sheet-page'));
-    placeBlockInFreeLayout(block, target, { basis: oldBox }) || markPageOverflow(target.closest('.sheet-page'));
-  } else {
-    target.prepend(block);
-    hydratePage(target.closest('.sheet-page'));
+  const oldBox = readBlockBox(block);
+  target.prepend(block);
+  hydratePage(target.closest('.sheet-page'));
+
+  if (isPositionableContainer(target)) {
+    enableManualPositioning(target);
+    let placed = placeBlockInFreeLayout(block, target, { basis: oldBox });
+    if (!placed) {
+      const fallback = { ...oldBox, x: 10, y: 10 };
+      placed = applyCandidateBox(block, fallback);
+    }
+    if (!placed || !blockFitsWithinPageBody(block)) {
+      block.dataset.pageOverflowLocked = 'true';
+      markPageOverflow(target.closest('.sheet-page'));
+    } else {
+      delete block.dataset.pageOverflowLocked;
+    }
   }
   return true;
 }
 
 function findOverflowingBlock(page) {
-  const blocks = Array.from(page.querySelectorAll('.sheet-body .block')).filter(block => !block.closest('.mission-cover'));
+  const blocks = Array.from(page.querySelectorAll('.sheet-body .block')).filter(isVisibleBlock);
   return blocks.find(blockContentOverflows) || null;
 }
 
@@ -1245,7 +1310,8 @@ function blockContentOverflows(block) {
   const contentBox = content.getBoundingClientRect();
   if (!blockBox.height || !contentBox.height) return false;
   if (isFreeLayoutBlock(block) || block.style.height || block.dataset.freeH) {
-    return contentBox.bottom > blockBox.bottom - 12 || block.scrollHeight > block.clientHeight + 8;
+    const overflowAmount = Math.max(contentBox.bottom - (blockBox.bottom - 12), block.scrollHeight - block.clientHeight);
+    return overflowAmount > 8;
   }
   return false;
 }
