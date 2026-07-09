@@ -1,24 +1,25 @@
-# Screamsheet Generator — Vanilla / Established Stack V5
+# Screamsheet Generator — Vanilla / Established Stack V7
 
 Static Cyberpunk RED Screamsheet editor. Open `index.html` directly or host the folder as a static site.
 
-## V5 fixes
+## V7 interaction fixes
 
-- Fixed the auto-flow duplication bug where a one-page document could keep generating repeated continuation blocks.
-- Auto-flow now distinguishes between:
-  - **text overflow inside a block**, which may create continuation blocks;
-  - **physical page overflow**, which moves the whole block to the next safe page instead of splitting text unnecessarily.
-- One-page documents are valid. If auto-flow genuinely needs more space, the app creates the next page safely.
-- Vanilla and Svelte root builds now share the same static files and visible capabilities.
+- Reworked block interaction so the move handle, reorder handle, and resize handle are separate controls.
+- Fixed the mass-overlap failure caused by reading default/free-layout coordinates instead of the actual rendered block positions.
+- Moving or resizing now freezes the current visual layout from `getBoundingClientRect()` before applying manual geometry.
+- Nested grids are handled as layout items, so a block inside a multi-column/nested layout no longer collapses the surrounding layout when selected, resized, or moved.
+- Reordering no longer shares the same handle/path as manual movement.
+- Collision markers are cleared and recalculated per interaction instead of persisting as stale state.
+- Background autosave no longer triggers full auto-pagination after every layout interaction. Reflow still runs when explicitly requested through **Reflow Now**, and text-edit auto-flow remains available from content edits.
 
 ## Core capabilities
 
 - Sidebar accordion UI.
 - Night City Today-style Screamsheet templates.
-- Add, duplicate, delete, drag, resize, and reorder blocks.
+- Add, duplicate, delete, move, resize, and reorder blocks.
 - Granular `X / Y / W / H` positioning in all layouts.
 - Collision prevention for positioned blocks.
-- Auto-flow in all layouts, including Free layout.
+- Auto-flow support in all layouts, including Free layout.
 - Per-block auto-flow toggle.
 - Font-size controls for title and body text.
 - Markdown recognition and safe conversion.
@@ -26,11 +27,10 @@ Static Cyberpunk RED Screamsheet editor. Open `index.html` directly or host the 
 - Project save/load as JSON.
 - Download PDF and print fallback.
 
+## V6 export stability retained
+
+The PDF export button is read-only: it does not run auto-flow or collision repair on the live editor document. If a browser blocks the direct raster renderer, the app falls back to a safe canvas/PDF renderer instead of mutating the working document. Print Fallback remains available.
+
 ## Notes
 
 If a block is too large to fit inside any printable area, the app marks it with an overflow warning instead of endlessly creating pages. Reduce the font size, resize the block, or make more room for continuation content.
-
-
-## V6 export stability note
-
-The PDF export button is read-only: it no longer runs auto-flow or collision repair on the live editor document. If a browser blocks the direct raster renderer, the app falls back to a safe canvas/PDF renderer instead of mutating the working document. Print Fallback remains available for browser-native PDF printing.

@@ -449,8 +449,8 @@ label { color: var(--app-muted); font-size: .72rem; text-transform: uppercase; l
   outline-offset: 3px;
 }
 .block.dragging { opacity: .48; }
-.block:hover .block-drag, .block.selected-block .block-drag, .block:hover .block-remove { opacity: 1; }
-.block-drag {
+.block:hover .block-drag, .block.selected-block .block-drag, .block:hover .block-reorder, .block.selected-block .block-reorder, .block:hover .block-remove { opacity: 1; }
+.block-drag, .block-reorder {
   position: absolute;
   left: -14px;
   top: -14px;
@@ -466,7 +466,9 @@ label { color: var(--app-muted); font-size: .72rem; text-transform: uppercase; l
   opacity: 0;
   cursor: grab;
 }
+.block-reorder { left: 18px; cursor: ns-resize; }
 .block-drag:active { cursor: grabbing; }
+.block-reorder:active { cursor: grabbing; }
 
 .sheet-grid > .span-1 { grid-column: auto; }
 .sheet-grid > .span-2 { grid-column: span 2; }
@@ -718,6 +720,8 @@ select, input[type="text"], input[type="number"] {
 .free-layout.drop-container, .manual-canvas.drop-container { outline: 2px dashed rgba(227, 27, 35, .28); outline-offset: -5px; }
 .sheet-body > .block.manual-positioned,
 .sheet-grid > .block.manual-positioned,
+.sheet-body > .sheet-grid.manual-positioned,
+.sheet-grid > .sheet-grid.manual-positioned,
 .free-layout > .block {
   position: absolute;
   left: var(--free-x, 0px);
@@ -733,7 +737,7 @@ select, input[type="text"], input[type="number"] {
 }
 .block.free-collision { outline: 3px solid #f59e0b !important; outline-offset: 4px; }
 .block.block-locked { outline-style: dotted; }
-.block.block-locked .block-drag { cursor: not-allowed; opacity: .6; }
+.block.block-locked .block-drag, .block.block-locked .block-reorder { cursor: not-allowed; opacity: .6; }
 .flow-continuation::before {
   content: "continued";
   display: block;
@@ -811,3 +815,6 @@ select, input[type="text"], input[type="number"] {
 [contenteditable="true"] ul,
 [contenteditable="true"] ol { margin: .35em 0 .35em 1.1em; padding: 0; }
 [contenteditable="true"] a { color: var(--theme-link); font-weight: 700; }
+/* V7: nested layout grids must size to their own content; otherwise later sections can climb under overflowing nested columns. */
+.sheet-grid > .sheet-grid { align-self: start; height: max-content; min-height: max-content; }
+.sheet-body > .sheet-grid { flex-shrink: 0; }

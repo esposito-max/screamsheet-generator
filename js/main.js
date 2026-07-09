@@ -103,7 +103,7 @@ function bindEvents() {
     const editable = event.target.closest('[contenteditable="true"]');
     if (editable) lastFocusedEditable = editable;
   });
-  els.documentContainer.addEventListener('input', queueAutosave);
+  els.documentContainer.addEventListener('input', () => queueAutosave({ allowPagination: true }));
   els.documentContainer.addEventListener('paste', handlePlainTextPaste);
   els.documentContainer.addEventListener('focusout', handleEditableBlur);
   els.documentContainer.addEventListener('pointerdown', handleFreePointerDown);
@@ -273,11 +273,34 @@ function hydratePage(page) {
       const drag = document.createElement('button');
       drag.className = 'block-drag control-only';
       drag.type = 'button';
-      drag.draggable = true;
-      drag.title = 'Drag block';
-      drag.setAttribute('aria-label', 'Drag block');
-      drag.textContent = '☰';
+      drag.draggable = false;
+      drag.title = 'Move block';
+      drag.setAttribute('aria-label', 'Move block');
+      drag.textContent = '✥';
       block.prepend(drag);
+    } else {
+      const drag = block.querySelector('.block-drag');
+      drag.draggable = false;
+      drag.title = 'Move block';
+      drag.setAttribute('aria-label', 'Move block');
+      drag.textContent = '✥';
+    }
+    if (!block.querySelector('.block-reorder')) {
+      const reorder = document.createElement('button');
+      reorder.className = 'block-reorder control-only';
+      reorder.type = 'button';
+      reorder.draggable = true;
+      reorder.title = 'Reorder block';
+      reorder.setAttribute('aria-label', 'Reorder block');
+      reorder.textContent = '↕';
+      const moveHandle = block.querySelector('.block-drag');
+      moveHandle?.after(reorder);
+    } else {
+      const reorder = block.querySelector('.block-reorder');
+      reorder.draggable = true;
+      reorder.title = 'Reorder block';
+      reorder.setAttribute('aria-label', 'Reorder block');
+      reorder.textContent = '↕';
     }
     if (!block.querySelector('.block-resize')) {
       const resize = document.createElement('button');
@@ -291,7 +314,7 @@ function hydratePage(page) {
   });
   page.querySelectorAll('.sheet-grid, .sheet-body').forEach(grid => {
     grid.classList.add('drop-container');
-    if (grid.classList.contains('free-layout') || grid.querySelector(':scope > .block[data-free-w], :scope > .block.manual-positioned')) {
+    if (grid.classList.contains('free-layout') || grid.querySelector(':scope > [data-free-w], :scope > .manual-positioned')) {
       enableManualPositioning(grid);
     }
   });
@@ -446,6 +469,12 @@ function isPositionableContainer(container) {
   return Boolean(container?.matches?.('.sheet-grid, .sheet-body'));
 }
 
+function getPositionableChildren(container) {
+  return Array.from(container?.children || []).filter(el =>
+    el.offsetParent !== null && (el.classList?.contains('block') || el.classList?.contains('sheet-grid'))
+  );
+}
+
 function isFreeLayoutBlock(block) {
   return Boolean(block?.classList?.contains('manual-positioned') || block?.parentElement?.classList?.contains('free-layout'));
 }
@@ -493,7 +522,7 @@ function readBlockBox(block) {
 
 function updateContainerManualHeight(container) {
   if (!isPositionableContainer(container)) return;
-  const blocks = Array.from(container.children).filter(el => el.classList?.contains('block') && (el.classList.contains('manual-positioned') || el.dataset.freeW));
+  const blocks = getPositionableChildren(container).filter(el => el.classList.contains('manual-positioned') || el.dataset.freeW);
   const bottom = blocks.reduce((max, block) => {
     const box = readBlockBox(block);
     return Math.max(max, box.y + box.h);
@@ -527,12 +556,18 @@ function writeBlockBox(block, box) {
 
 function enableManualPositioning(container) {
   if (!isPositionableContainer(container)) return;
-  const blocks = Array.from(container.children).filter(el => el.classList?.contains('block'));
+  const blocks = getPositionableChildren(container);
   if (!blocks.length) {
     container.classList.add('manual-canvas');
     return;
   }
-  const boxes = blocks.map(block => readBlockBox(block));
+
+  // Freeze the current rendered layout before changing positioning mode.
+  // The V6 path read stored/default free-layout boxes for blocks that did not
+  // have geometry yet, which gave many blocks the same 0/0/260/170 box and
+  // caused the mass-overlap failure when a user clicked move/resize.
+  // getBoundingClientRect() is the source of truth here.
+  const boxes = blocks.map(block => readVisualBox(block));
   container.classList.add('manual-canvas');
   blocks.forEach((block, index) => writeBlockBox(block, boxes[index]));
   updateContainerManualHeight(container);
@@ -555,11 +590,15 @@ function boxesOverlap(a, b) {
   return !(a.x + a.w <= b.x || b.x + b.w <= a.x || a.y + a.h <= b.y || b.y + b.h <= a.y);
 }
 
+function clearCollisionMarkers(scope = els.documentContainer) {
+  scope?.querySelectorAll?.('.free-collision')?.forEach(el => el.classList.remove('free-collision'));
+}
+
 function wouldOverlap(block, candidate) {
   const container = block.parentElement;
   if (!isPositionableContainer(container)) return false;
-  return Array.from(container.children).some(other => {
-    if (other === block || !other.classList?.contains('block') || other.offsetParent === null) return false;
+  return getPositionableChildren(container).some(other => {
+    if (other === block || other.offsetParent === null) return false;
     return boxesOverlap(candidate, readBlockBox(other));
   });
 }
@@ -568,6 +607,7 @@ function applyCandidateBox(block, candidate, { allowOverlap = false } = {}) {
   const container = block.parentElement;
   if (!isPositionableContainer(container)) return false;
   const box = clampBoxToContainer(candidate, container);
+  clearCollisionMarkers(container);
   if (!allowOverlap && wouldOverlap(block, box)) {
     block.classList.add('free-collision');
     return false;
@@ -577,6 +617,7 @@ function applyCandidateBox(block, candidate, { allowOverlap = false } = {}) {
   syncFreeControlsFromBlock(block);
   return true;
 }
+
 
 function initializeFreeLayout(container) {
   if (!container) return;
@@ -669,9 +710,11 @@ function handleFreePointerDown(event) {
   const block = handle.closest('.block');
   if (!block || !isPositionableContainer(block.parentElement)) return;
   event.preventDefault();
+  event.stopPropagation();
   if (block.classList.contains('block-locked')) return;
   setActiveBlock(block);
   enableManualPositioning(block.parentElement);
+  clearCollisionMarkers(block.parentElement);
   const start = readBlockBox(block);
   freePointerState = {
     block,
@@ -700,7 +743,7 @@ function handleFreePointerMove(event) {
 
 function handleFreePointerUp() {
   if (freePointerState?.block) {
-    freePointerState.block.classList.remove('free-collision');
+    clearCollisionMarkers(freePointerState.block.parentElement);
     syncFreeControlsFromBlock(freePointerState.block);
   }
   freePointerState = null;
@@ -766,9 +809,9 @@ function handleDocumentClick(event) {
 
 
 function handleDragStart(event) {
-  const handle = event.target.closest('.block-drag');
+  const handle = event.target.closest('.block-reorder');
   const block = handle?.closest('.block');
-  if (!block || isFreeLayoutBlock(block)) {
+  if (!block) {
     event.preventDefault();
     return;
   }
@@ -1131,20 +1174,20 @@ function sanitizeProjectHtml(html) {
   return doc.querySelector('main').innerHTML;
 }
 
-function queueAutosave() {
-  queueLayoutMaintenance();
+function queueAutosave({ allowPagination = false } = {}) {
+  queueLayoutMaintenance({ allowPagination });
   clearTimeout(autosaveTimer);
   autosaveTimer = setTimeout(() => saveAutosave(buildProjectData()), 900);
 }
 
-function queueLayoutMaintenance() {
+function queueLayoutMaintenance({ allowPagination = false } = {}) {
   clearTimeout(layoutMaintenanceTimer);
-  layoutMaintenanceTimer = setTimeout(() => runLayoutMaintenance(), 260);
+  layoutMaintenanceTimer = setTimeout(() => runLayoutMaintenance({ allowPagination }), 260);
 }
 
-function runLayoutMaintenance({ forcePagination = false } = {}) {
+function runLayoutMaintenance({ forcePagination = false, allowPagination = false } = {}) {
   fitHeadlines(els.documentContainer);
-  if (forcePagination || els.autoFlowToggle?.checked) paginateOverflow();
+  if (forcePagination || (allowPagination && els.autoFlowToggle?.checked)) paginateOverflow();
   updatePageNumbers();
 }
 
@@ -1523,7 +1566,7 @@ function restoreEditorSnapshot(snapshot) {
   if (page) {
     setActivePage(page);
     const blocks = Array.from(page.querySelectorAll('.block'));
-    if (snapshot.activeBlockIndex >= 0 && blocks[snapshot.activeBlockIndex]) selectBlock(blocks[snapshot.activeBlockIndex]);
+    if (snapshot.activeBlockIndex >= 0 && blocks[snapshot.activeBlockIndex]) setActiveBlock(blocks[snapshot.activeBlockIndex]);
   }
   updatePageNumbers();
 }

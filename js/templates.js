@@ -1,6 +1,7 @@
 export function blockShell(innerHtml, className = '') {
   return `<article class="block ${className}" draggable="false">
-    <button class="block-drag control-only" type="button" draggable="true" title="Drag block" aria-label="Drag block">☰</button>
+    <button class="block-drag control-only" type="button" draggable="false" title="Move block" aria-label="Move block">✥</button>
+    <button class="block-reorder control-only" type="button" draggable="true" title="Reorder block" aria-label="Reorder block">↕</button>
     <button class="block-remove control-only" type="button" title="Remove block">×</button>
     ${innerHtml}
   </article>`;
