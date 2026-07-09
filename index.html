@@ -10,6 +10,11 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
+    
+    <!-- PDF Generation Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
     <style>
         /* Use Inter as the default font */
         body { font-family: 'Inter', sans-serif; }
@@ -41,7 +46,7 @@
             margin: 1rem 0;
             display: flex;
             flex-direction: column;
-            position: relative; /* For remove button */
+            position: relative;
         }
         
         @media (min-width: 768px) {
@@ -72,7 +77,6 @@
             color: var(--theme-text-on-primary);
         }
         
-        /* Corporate Header Styles */
         .corporate-header {
             font-family: 'Times New Roman', Times, serif;
             text-align: center;
@@ -131,13 +135,22 @@
             width: 100%; height: 100%; object-fit: contain;
         }
         
-        /* Static header icons */
         .header-icon {
             height: 2.5rem; width: 2.5rem;
             object-fit: contain;
         }
         @media (min-width: 640px) { .header-icon { height: 3rem; width: 3rem; } }
 
+        /* --- In-Universe Ad Block --- */
+        .ad-block {
+            border: 4px solid var(--theme-page-text);
+            padding: 0.5rem;
+            background-color: var(--theme-page-bg);
+            text-align: center;
+            font-weight: 900;
+            text-transform: uppercase;
+        }
+        .ad-block .image-placeholder { border: none; background: transparent; height: auto; min-height: 12rem; }
 
         /* --- Buttons --- */
         .remove-btn, .remove-layout-btn {
@@ -162,83 +175,64 @@
         .screamsheet-page:hover .remove-page-btn { display: inline-block; }
         .remove-page-btn:hover { background-color: #dc2626; transform: scale(1.1); }
 
-        .article-block:hover .remove-btn, .layout-block:hover .remove-layout-btn {
+        .article-block:hover .remove-btn, .layout-block:hover .remove-layout-btn, .ad-block:hover .remove-btn {
             display: inline-block;
         }
 
-
         /* --- Layout Block System --- */
-        .screamsheet-body { 
-            display: flex; 
-            flex-direction: column; 
-            gap: 1.5rem; 
-        }
+        .screamsheet-body { display: flex; flex-direction: column; gap: 1.5rem; }
         .layout-block {
             position: relative;
             border: 1px dashed transparent;
             padding: 0.5rem;
             transition: border-color 0.2s ease;
         }
-        .layout-block:hover {
-            border-color: #d1d5db; /* gray-300 */
-        }
-        .layout-block-content {
-            display: grid;
-            gap: 1.5rem;
-        }
+        .layout-block:hover { border-color: #d1d5db; }
+        .layout-block-content { display: grid; gap: 1.5rem; }
 
-        /* 1-Col */
         .layout-1-col .layout-block-content { grid-template-columns: 1fr; }
-        
-        /* 2-Col */
         .layout-2-col .layout-block-content { grid-template-columns: 1fr; }
-        @media (min-width: 768px) {
-            .layout-2-col .layout-block-content { grid-template-columns: repeat(2, 1fr); }
-        }
-
-        /* 3-Col */
+        @media (min-width: 768px) { .layout-2-col .layout-block-content { grid-template-columns: repeat(2, 1fr); } }
         .layout-3-col .layout-block-content { grid-template-columns: 1fr; }
-        @media (min-width: 768px) {
-            .layout-3-col .layout-block-content { grid-template-columns: repeat(3, 1fr); }
-        }
-
-        /* Sidebar Right */
+        @media (min-width: 768px) { .layout-3-col .layout-block-content { grid-template-columns: repeat(3, 1fr); } }
         .layout-sidebar-right .layout-block-content { grid-template-columns: 1fr; }
-        @media (min-width: 768px) {
-            .layout-sidebar-right .layout-block-content { grid-template-columns: 2fr 1fr; }
-        }
-        
-        /* Sidebar Left */
+        @media (min-width: 768px) { .layout-sidebar-right .layout-block-content { grid-template-columns: 2fr 1fr; } }
         .layout-sidebar-left .layout-block-content { grid-template-columns: 1fr; }
         .layout-sidebar-left .layout-block-content .col-main { order: 2; }
         .layout-sidebar-left .layout-block-content .col-sidebar { order: 1; }
         @media (min-width: 768px) {
             .layout-sidebar-left .layout-block-content { grid-template-columns: 1fr 2fr; }
-            .layout-sidebar-left .layout-block-content .col-main { order: 2; }
-            .layout-sidebar-left .layout-block-content .col-sidebar { order: 1; }
         }
 
-        .layout-column {
-            display: flex;
-            flex-direction: column;
-            gap: 1rem;
+        /* Asymmetrical Screamsheet Grid */
+        .layout-screamsheet .layout-block-content { grid-template-columns: 1fr; }
+        @media (min-width: 768px) {
+            .layout-screamsheet .layout-block-content {
+                grid-template-columns: repeat(3, 1fr);
+                grid-auto-rows: min-content;
+            }
+            .layout-screamsheet .col-span-vertical {
+                grid-row: span 2;
+                border-right: 2px solid var(--theme-page-text);
+                padding-right: 1.5rem;
+            }
+            .layout-screamsheet .col-span-horizontal {
+                grid-column: span 2;
+                border-bottom: 2px solid var(--theme-page-text);
+                padding-bottom: 1.5rem;
+            }
         }
-        .add-article-btn {
-            width: 100%;
-            padding: 0.5rem 1rem;
-            font-size: 0.875rem;
-            font-weight: 700;
-            color: #4b5563;
-            background-color: #f3f4f6;
-            border: 2px dashed #d1d5db;
-            border-radius: 0.375rem;
-            cursor: pointer;
-            transition: all 0.2s ease;
+
+        .layout-column { display: flex; flex-direction: column; gap: 1rem; }
+        
+        .add-article-btn, .add-ad-btn {
+            width: 100%; padding: 0.5rem 1rem; font-size: 0.875rem; font-weight: 700;
+            color: #4b5563; background-color: #f3f4f6; border: 2px dashed #d1d5db;
+            border-radius: 0.375rem; cursor: pointer; transition: all 0.2s ease;
         }
-        .add-article-btn:hover {
-            background-color: #e5e7eb;
-            border-color: #9ca3af;
-        }
+        .add-ad-btn { background-color: #fef08a; color: #b45309; border-color: #fde047; margin-top: 0.5rem; }
+        .add-article-btn:hover { background-color: #e5e7eb; border-color: #9ca3af; }
+        .add-ad-btn:hover { background-color: #fde047; }
         
         /* --- Modals --- */
         .modal-overlay {
@@ -249,44 +243,16 @@
         .modal-content {
             background-color: #27272a; border: 1px solid #3f3f46;
             color: white; max-width: 64rem; width: 95%;
-            border-radius: 0.5rem; shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
-            max-height: 90vh; display: flex; flex-direction: column;
+            border-radius: 0.5rem; max-height: 90vh; display: flex; flex-direction: column;
         }
-
-        .logo-grid {
-            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
-        }
+        .logo-grid { grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); }
         .logo-grid img {
             border: 2px solid #404040; border-radius: 0.375rem;
             cursor: pointer; transition: transform 0.1s, border-color 0.1s;
-            background-color: white;
-            padding: 0.25rem;
+            background-color: white; padding: 0.25rem;
         }
-        .logo-grid img:hover {
-            transform: scale(1.05); border-color: var(--theme-primary);
-        }
+        .logo-grid img:hover { transform: scale(1.05); border-color: var(--theme-primary); }
 
-        /* --- Print Styles --- */
-        @media print {
-            body { background-color: #ffffff; }
-            #editor-ui, .modal-overlay, .add-article-btn, .remove-btn, .remove-layout-btn, .remove-page-btn { 
-                display: none !important; 
-            }
-            #document-container { margin: 0; padding: 0; }
-            .screamsheet-page {
-                box-shadow: none; margin: 0; width: 100%;
-                min-height: 0; height: auto; page-break-after: always;
-            }
-            .screamsheet-page:last-child { page-break-after: auto; }
-            
-            .image-placeholder { border: none; background: none; }
-            .image-placeholder span { display: none; }
-            .layout-block { border: none; padding: 0; }
-            
-            [contenteditable="true"]:focus { outline: none; background-color: transparent; }
-            .article-image { max-width: 100% !important; display: block; }
-        }
-        @page { size: A4; margin: 0; }
     </style>
 </head>
 <body class="bg-zinc-900 text-white">
@@ -295,7 +261,6 @@
     <div id="editor-ui" class="bg-zinc-800 p-2 sm:p-4 sticky top-0 z-50 shadow-lg flex flex-wrap gap-2 sm:gap-4 items-center justify-center">
         <span class="text-lg font-bold text-red-500 hidden sm:inline">SCREAMSHEET EDITOR</span>
         
-        <!-- Theme Selector -->
         <select id="theme-select" class="bg-zinc-700 border border-zinc-600 rounded-md px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500">
             <option value="nct">NCT News</option>
             <option value="trauma-team">Trauma Team</option>
@@ -305,14 +270,14 @@
             <option value="network54">Network54</option>
         </select>
         
-        <!-- Add Layout Blocks -->
         <div class="flex gap-2 p-2 bg-zinc-700 rounded-md">
             <button class="add-layout-btn bg-gray-600 hover:bg-gray-500 text-white font-bold py-1 px-2 rounded-md text-sm transition-colors" data-layout="layout-1-col" title="Add 1-Column Block">1 Col</button>
             <button class="add-layout-btn bg-gray-600 hover:bg-gray-500 text-white font-bold py-1 px-2 rounded-md text-sm transition-colors" data-layout="layout-2-col" title="Add 2-Column Block">2 Col</button>
             <button class="add-layout-btn bg-gray-600 hover:bg-gray-500 text-white font-bold py-1 px-2 rounded-md text-sm transition-colors" data-layout="layout-sidebar-right" title="Add Sidebar Right Block">Sidebar</button>
+            <!-- New Grid Button -->
+            <button class="add-layout-btn bg-purple-600 hover:bg-purple-500 text-white font-bold py-1 px-2 rounded-md text-sm transition-colors" data-layout="layout-screamsheet" title="Add Complex Grid">Screamsheet Grid</button>
         </div>
 
-        <!-- Toolbar Buttons -->
         <button id="open-logo-library-btn" class="bg-yellow-600 hover:bg-yellow-700 text-white font-bold p-2 rounded-md text-sm transition-colors" title="Logo Library">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" /></svg>
         </button>
@@ -335,12 +300,7 @@
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-8 h-8"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>
             </div>
-            
-            <div class="flex-grow overflow-y-auto pr-2" id="asset-library-container">
-                <!-- JS will populate this -->
-            </div>
-
-            <!-- Upload Area Footer -->
+            <div class="flex-grow overflow-y-auto pr-2" id="asset-library-container"></div>
             <div class="mt-4 border-t border-gray-600 pt-4">
                  <div class="flex justify-between items-center mb-2">
                      <h3 class="text-sm font-bold text-gray-300">Add New Assets</h3>
@@ -362,19 +322,14 @@
         <div class="bg-zinc-800 border border-zinc-600 p-6 rounded-lg shadow-2xl max-w-md w-full">
             <h3 class="text-xl font-bold text-white mb-4">Categorize Uploads</h3>
             <p class="text-gray-400 text-sm mb-4">You are uploading <span id="upload-count" class="text-white font-bold">0</span> file(s). Where should they go?</p>
-            
             <div class="mb-4">
                 <label class="block text-xs text-gray-400 uppercase font-bold mb-1">Select Category</label>
-                <select id="category-select" class="w-full bg-zinc-900 border border-gray-600 text-white rounded p-2 focus:border-blue-500 focus:outline-none">
-                    <!-- Populated by JS -->
-                </select>
+                <select id="category-select" class="w-full bg-zinc-900 border border-gray-600 text-white rounded p-2 focus:border-blue-500 focus:outline-none"></select>
             </div>
-            
             <div id="new-category-input-container" class="mb-6 hidden">
                 <label class="block text-xs text-gray-400 uppercase font-bold mb-1">New Category Name</label>
                 <input type="text" id="new-category-input" class="w-full bg-zinc-900 border border-gray-600 text-white rounded p-2 focus:border-green-500 focus:outline-none" placeholder="e.g. Nomads">
             </div>
-            
             <div class="flex justify-end gap-2">
                 <button id="cancel-upload-btn" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded text-sm font-bold">Cancel</button>
                 <button id="save-upload-btn" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded text-sm font-bold">Save Assets</button>
@@ -382,14 +337,9 @@
         </div>
     </div>
     
-    <!-- === DOCUMENT CONTAINER === -->
-    <div id="document-container" class="relative">
-        <!-- Page 1 will be generated by JS init -->
-    </div>
+    <div id="document-container" class="relative"></div>
     
-    <!-- === TEMPLATES (Hidden) === -->
-    
-    <!-- Article Template -->
+    <!-- === TEMPLATES === -->
     <div id="article-template" class="article-block break-inside-avoid-column relative" style="display: none;">
         <button class="remove-btn text-red-500 hover:text-red-700" title="Remove Article"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M15 12H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></button>
         <h2 contenteditable="true" data-placeholder="New Article Headline">New Article Headline</h2>
@@ -401,25 +351,30 @@
         <div class="article-body text-justify" contenteditable="true" data-placeholder="Start writing..."><p>New article content.</p></div>
         <div class="article-links mt-2" contenteditable="true" data-placeholder="Link: Example Link">Link: New Link</div>
     </div>
+
+    <!-- New Ad Template -->
+    <div id="ad-template" class="ad-block break-inside-avoid-column relative" style="display: none;">
+        <button class="remove-btn text-red-500 hover:text-red-700" title="Remove Ad"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M15 12H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></button>
+        <div class="image-placeholder relative mb-2">
+            <span class="text-gray-400 text-sm p-2">Click to add Ad Image</span>
+            <img src="" alt="Ad Image" class="article-image hidden">
+        </div>
+        <div class="text-sm" contenteditable="true" data-placeholder="Advertisement tagline...">Protecting what matters.</div>
+    </div>
     
-    <!-- Page Template -->
     <div id="page-template" class="screamsheet-page" style="display: none;">
         <button class="remove-page-btn" title="Remove Page"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12.578 0a48.09 48.09 0 01-3.478-.397m15.908 0A49.133 49.133 0 0112 4.5c-2.705 0-5.32.39-7.842 1.15m15.684 0v.003z" /></svg></button>
         <header class="p-6 border-b-2 border-black">
-            <!-- Header Icons -->
             <div class="flex justify-between items-center mb-4">
                 <img src="" alt="Header Icon Left" class="header-icon">
                 <div contenteditable="true" data-placeholder="Enter time" class="timestamp text-2xl sm:text-3xl font-bold text-center">6:25 AM</div>
                 <img src="" alt="Header Icon Right" class="header-icon">
             </div>
-            <!-- Main Logo & Categories -->
             <div class="flex flex-col sm:flex-row sm:flex-nowrap items-center gap-4">
                 <div class="image-placeholder relative h-24 w-full sm:w-64 flex-shrink-0 border-none bg-transparent" title="Main News Logo">
                     <span class="text-gray-400 text-sm p-2 absolute inset-0 flex items-center justify-center border-2 border-dashed border-gray-300 rounded-md">Click to add Main Logo</span>
                     <img src="" alt="News Logo" class="article-image hidden" data-logo-name="">
                 </div>
-                
-                <!-- News Category Header -->
                 <div class="news-categories grid grid-cols-2 sm:grid-cols-4 gap-1 sm:gap-2 w-full">
                     <div class="news-category" data-topic="gossip">GOSSIP</div>
                     <div class="news-category" data-topic="opinion">OPINION</div>
@@ -430,19 +385,14 @@
                     <div class="news-category active" data-topic="business">BUSINESS</div>
                     <div class="news-category" data-topic="world">WORLD</div>
                 </div>
-                
-                <!-- Corporate Header (Initially Hidden) -->
                 <div class="corporate-header w-full hidden">
                     <h1 contenteditable="true" data-placeholder="MEMORANDUM" class="text-4xl font-bold uppercase tracking-widest">MEMORANDUM</h1>
                     <h2 contenteditable="true" data-placeholder="CONFIDENTIAL // FOR INTERNAL USE ONLY" class="text-sm font-bold uppercase tracking-wider text-gray-600 mt-1">CONFIDENTIAL // FOR INTERNAL USE ONLY</h2>
                 </div>
-
             </div>
         </header>
         <main class="screamsheet-content p-6">
-            <div class="screamsheet-body">
-                <!-- Layout blocks will be added here by JS -->
-            </div>
+            <div class="screamsheet-body"></div>
         </main>
         <footer class="p-6 border-t-2 border-black mt-auto">
             <div class="footer-crawl-container text-center">
@@ -456,12 +406,13 @@
         </footer>
     </div>
     
-    <!-- Layout Block Templates -->
+    <!-- Layout Templates -->
     <div id="layout-1-col-template" class="layout-block layout-1-col" style="display: none;">
         <button class="remove-layout-btn" title="Remove Block"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg></button>
         <div class="layout-block-content">
             <div class="layout-column col-main">
                 <button class="add-article-btn">+ Add Article to Column</button>
+                <button class="add-ad-btn">+ Add Ad Block</button>
             </div>
         </div>
     </div>
@@ -471,48 +422,34 @@
         <div class="layout-block-content">
             <div class="layout-column col-main">
                 <button class="add-article-btn">+ Add Article to Column 1</button>
+                <button class="add-ad-btn">+ Add Ad Block</button>
             </div>
             <div class="layout-column col-main">
                 <button class="add-article-btn">+ Add Article to Column 2</button>
+                <button class="add-ad-btn">+ Add Ad Block</button>
             </div>
         </div>
     </div>
-    
-    <div id="layout-3-col-template" class="layout-block layout-3-col" style="display: none;">
+
+    <!-- Screamsheet Grid Template -->
+    <div id="layout-screamsheet-template" class="layout-block layout-screamsheet" style="display: none;">
         <button class="remove-layout-btn" title="Remove Block"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg></button>
         <div class="layout-block-content">
-            <div class="layout-column col-main">
-                <button class="add-article-btn">+ Add Article</button>
-            </div>
-            <div class="layout-column col-main">
-                <button class="add-article-btn">+ Add Article</button>
-            </div>
-            <div class="layout-column col-main">
-                <button class="add-article-btn">+ Add Article</button>
-            </div>
-        </div>
-    </div>
-    
-    <div id="layout-sidebar-right-template" class="layout-block layout-sidebar-right" style="display: none;">
-        <button class="remove-layout-btn" title="Remove Block"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg></button>
-        <div class="layout-block-content">
-            <div class="layout-column col-main">
-                <button class="add-article-btn">+ Add Main Article</button>
-            </div>
-            <div class="layout-column col-sidebar">
+            <div class="layout-column col-span-vertical">
                 <button class="add-article-btn">+ Add Sidebar Article</button>
+                <button class="add-ad-btn">+ Add Ad Block</button>
             </div>
-        </div>
-    </div>
-    
-    <div id="layout-sidebar-left-template" class="layout-block layout-sidebar-left" style="display: none;">
-        <button class="remove-layout-btn" title="Remove Block"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg></button>
-        <div class="layout-block-content">
-            <div class="layout-column col-sidebar">
-                <button class="add-article-btn">+ Add Sidebar Article</button>
+            <div class="layout-column col-span-horizontal">
+                <button class="add-article-btn">+ Add Feature Article</button>
+                <button class="add-ad-btn">+ Add Ad Block</button>
             </div>
             <div class="layout-column col-main">
-                <button class="add-article-btn">+ Add Main Article</button>
+                <button class="add-article-btn">+ Add Minor Article</button>
+                <button class="add-ad-btn">+ Add Ad Block</button>
+            </div>
+            <div class="layout-column col-main">
+                <button class="add-article-btn">+ Add Minor Article</button>
+                <button class="add-ad-btn">+ Add Ad Block</button>
             </div>
         </div>
     </div>
@@ -520,10 +457,6 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
-            
-            // =================================================================
-            //  STANDARD ASSET LIBRARY (Categorized Map/Dictionary)
-            // =================================================================
             const ASSET_LIBRARY = {
                 "Corporations": [
                     { name: "American Logo", src: "./Cyberpunk RED Logos/Americar Logo.png" },
@@ -641,23 +574,18 @@
                 ]
             };
             
-            // List of logos that are considered "Media" and should show the news header
             const MEDIA_CORP_LOGOS = [
                 "Night City Today News Logo.png",
                 "Night City Today News Logo Black.png",
                 "Network54 Logo.png"
             ];
 
-
-            // Global state for pending uploads
             let pendingUploadFiles = [];
 
-            // === ELEMENTS ===
             const themeSelect = document.getElementById('theme-select');
             const addPageBtn = document.getElementById('add-page-btn');
             const printBtn = document.getElementById('print-pdf-btn');
             
-            // Logo Modal Elements
             const openLogoLibraryBtn = document.getElementById('open-logo-library-btn');
             const logoModal = document.getElementById('logo-library-modal');
             const closeLogoLibraryBtn = document.getElementById('close-logo-library-btn');
@@ -665,7 +593,6 @@
             const logoUploadInput = document.getElementById('logo-upload-input');
             const clearUploadsBtn = document.getElementById('clear-uploads-btn');
 
-            // Categorize Modal Elements
             const categorizeModal = document.getElementById('categorize-modal');
             const categorySelect = document.getElementById('category-select');
             const newCategoryInputContainer = document.getElementById('new-category-input-container');
@@ -676,72 +603,42 @@
 
             const documentContainer = document.getElementById('document-container');
             const articleTemplate = document.getElementById('article-template');
+            const adTemplate = document.getElementById('ad-template');
             const pageTemplate = document.getElementById('page-template');
             
             let currentImageTarget = null;
             let currentActivePage = null;
 
-            // === THEMES & LAYOUTS ===
             const themes = {
                 'network54': { 
-                    '--theme-primary': '#e60000', /* Red */
-                    '--theme-secondary': '#000000', /* Black */
-                    '--theme-text-on-secondary': '#ffffff', 
-                    '--theme-text-on-primary': '#ffffff', 
-                    '--theme-page-bg': '#ffffff', 
-                    '--theme-page-text': '#000000', 
-                    '--theme-byline-bg': '#f2e6e6', /* Light Red/Gray */
-                    '--theme-link-text': '#e60000' 
+                    '--theme-primary': '#e60000', '--theme-secondary': '#000000', '--theme-text-on-secondary': '#ffffff', 
+                    '--theme-text-on-primary': '#ffffff', '--theme-page-bg': '#ffffff', '--theme-page-text': '#000000', 
+                    '--theme-byline-bg': '#f2e6e6', '--theme-link-text': '#e60000' 
                 },
                 'nct': { 
-                    '--theme-primary': '#c56aad', /* Pink */
-                    '--theme-secondary': '#9c7bb6', /* Purple */
-                    '--theme-text-on-secondary': '#ffffff', 
-                    '--theme-text-on-primary': '#ffffff', 
-                    '--theme-page-bg': '#ffffff', 
-                    '--theme-page-text': '#000000', 
-                    '--theme-byline-bg': '#f0e6f2', /* Light Pink/Purple */
-                    '--theme-link-text': '#5b9dd4' /* Blue */
+                    '--theme-primary': '#c56aad', '--theme-secondary': '#9c7bb6', '--theme-text-on-secondary': '#ffffff', 
+                    '--theme-text-on-primary': '#ffffff', '--theme-page-bg': '#ffffff', '--theme-page-text': '#000000', 
+                    '--theme-byline-bg': '#f0e6f2', '--theme-link-text': '#5b9dd4' 
                 },
                 'trauma-team': { 
-                    '--theme-primary': '#86b684', /* Mid Green */
-                    '--theme-secondary': '#2f5558', /* Dark Teal */
-                    '--theme-text-on-secondary': '#ffffff', 
-                    '--theme-text-on-primary': '#ffffff', 
-                    '--theme-page-bg': '#ffffff', 
-                    '--theme-page-text': '#000000', 
-                    '--theme-byline-bg': '#c7e7ae', /* Light Green */
-                    '--theme-link-text': '#49816c' /* Dark Green */
+                    '--theme-primary': '#86b684', '--theme-secondary': '#2f5558', '--theme-text-on-secondary': '#ffffff', 
+                    '--theme-text-on-primary': '#ffffff', '--theme-page-bg': '#ffffff', '--theme-page-text': '#000000', 
+                    '--theme-byline-bg': '#c7e7ae', '--theme-link-text': '#49816c' 
                 },
                 'arasaka': { 
-                    '--theme-primary': '#e60000', /* Red */
-                    '--theme-secondary': '#000000', /* Black */
-                    '--theme-text-on-secondary': '#ffffff', 
-                    '--theme-text-on-primary': '#ffffff', 
-                    '--theme-page-bg': '#ffffff', 
-                    '--theme-page-text': '#000000', 
-                    '--theme-byline-bg': '#f2e6e6', /* Light Red */
-                    '--theme-link-text': '#e60000' 
+                    '--theme-primary': '#e60000', '--theme-secondary': '#000000', '--theme-text-on-secondary': '#ffffff', 
+                    '--theme-text-on-primary': '#ffffff', '--theme-page-bg': '#ffffff', '--theme-page-text': '#000000', 
+                    '--theme-byline-bg': '#f2e6e6', '--theme-link-text': '#e60000' 
                 },
                 'militech': { 
-                    '--theme-primary': '#4D5D53', /* Olive Drab */
-                    '--theme-secondary': '#222222', /* Gunmetal */
-                    '--theme-text-on-secondary': '#ffffff', 
-                    '--theme-text-on-primary': '#ffffff', 
-                    '--theme-page-bg': '#ffffff', 
-                    '--theme-page-text': '#000000', 
-                    '--theme-byline-bg': '#D9E0D7', /* Light Camo */
-                    '--theme-link-text': '#4D5D53' 
+                    '--theme-primary': '#4D5D53', '--theme-secondary': '#222222', '--theme-text-on-secondary': '#ffffff', 
+                    '--theme-text-on-primary': '#ffffff', '--theme-page-bg': '#ffffff', '--theme-page-text': '#000000', 
+                    '--theme-byline-bg': '#D9E0D7', '--theme-link-text': '#4D5D53' 
                 },
                 'biotechnica': { 
-                    '--theme-primary': '#22c55e', /* Bright Green */
-                    '--theme-secondary': '#f0fdf4', /* Light Green BG */
-                    '--theme-text-on-secondary': '#14532d', /* Dark Green Text */
-                    '--theme-text-on-primary': '#ffffff', 
-                    '--theme-page-bg': '#ffffff', 
-                    '--theme-page-text': '#000000', 
-                    '--theme-byline-bg': '#dcfce7', 
-                    '--theme-link-text': '#166534' 
+                    '--theme-primary': '#22c55e', '--theme-secondary': '#f0fdf4', '--theme-text-on-secondary': '#14532d', 
+                    '--theme-text-on-primary': '#ffffff', '--theme-page-bg': '#ffffff', '--theme-page-text': '#000000', 
+                    '--theme-byline-bg': '#dcfce7', '--theme-link-text': '#166534' 
                 }
             };
 
@@ -755,8 +652,6 @@
             }
             themeSelect.addEventListener('change', (e) => applyTheme(e.target.value));
 
-
-            // === PAGE CREATION ===
             function createPage() {
                 const newPage = pageTemplate.cloneNode(true);
                 newPage.id = `page-${Date.now()}`;
@@ -764,48 +659,36 @@
                 documentContainer.appendChild(newPage);
                 applyTheme(themeSelect.value);
                 
-                // Add default logos
                 const mainLogo = newPage.querySelector('header .image-placeholder[title="Main News Logo"] .article-image');
-                mainLogo.src = ASSET_LIBRARY['Corporations'][42].src; // NCT News
+                mainLogo.src = ASSET_LIBRARY['Corporations'][42].src; 
                 mainLogo.setAttribute('data-logo-name', 'Night City Today News Logo.png');
                 mainLogo.classList.remove('hidden');
                 newPage.querySelector('header .image-placeholder[title="Main News Logo"] span').style.display = 'none';
                 
-                const iconLeft = newPage.querySelector('.header-icon[alt="Header Icon Left"]');
-                iconLeft.src = ASSET_LIBRARY['UI & Ads'][2].src; // Satellite
+                newPage.querySelector('.header-icon[alt="Header Icon Left"]').src = ASSET_LIBRARY['UI & Ads'][2].src; 
+                newPage.querySelector('.header-icon[alt="Header Icon Right"]').src = ASSET_LIBRARY['UI & Ads'][1].src; 
                 
-                const iconRight = newPage.querySelector('.header-icon[alt="Header Icon Right"]');
-                iconRight.src = ASSET_LIBRARY['UI & Ads'][1].src; // Plug
-                
-                // Add default 1-col layout
                 const defaultLayout = document.getElementById('layout-1-col-template').cloneNode(true);
                 defaultLayout.id = '';
                 defaultLayout.style.display = 'block';
                 newPage.querySelector('.screamsheet-body').appendChild(defaultLayout);
                 
-                // Set default header (News)
-                toggleHeaderType(newPage, true); // true = is media
-
-                // Set as active page
+                toggleHeaderType(newPage, true); 
                 setActivePage(newPage);
             }
             
             function setActivePage(pageElement) {
                 document.querySelectorAll('.screamsheet-page').forEach(p => p.style.zIndex = '10');
-                if (currentActivePage) {
-                    currentActivePage.style.boxShadow = "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)";
-                }
+                if (currentActivePage) currentActivePage.style.boxShadow = "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)";
                 currentActivePage = pageElement;
-                if (currentActivePage) { // Check if currentActivePage is not null
-                    currentActivePage.style.boxShadow = "0 0 0 4px #ef4444"; // Highlight active page
+                if (currentActivePage) {
+                    currentActivePage.style.boxShadow = "0 0 0 4px #ef4444";
                     currentActivePage.style.zIndex = '20';
                 }
             }
             
             addPageBtn.addEventListener('click', createPage);
 
-            // === ASSET LIBRARY FUNCTIONS ===
-            
             function getUserLibrary() {
                 const raw = localStorage.getItem('logoLibraryV3');
                 if (raw) {
@@ -817,21 +700,14 @@
                 return {};
             }
 
-            function saveUserLibrary(lib) {
-                localStorage.setItem('logoLibraryV3', JSON.stringify(lib));
-            }
+            function saveUserLibrary(lib) { localStorage.setItem('logoLibraryV3', JSON.stringify(lib)); }
 
             function renderAssetLibrary() {
                 assetLibraryContainer.innerHTML = '';
-                
-                // 1. Render Standard Assets
                 renderLibrarySection(ASSET_LIBRARY, 'Standard Assets');
-                
-                // 2. Render User Assets
                 const userLib = getUserLibrary();
-                if (Object.keys(userLib).length > 0) {
-                    renderLibrarySection(userLib, 'My Uploads');
-                } else {
+                if (Object.keys(userLib).length > 0) renderLibrarySection(userLib, 'My Uploads');
+                else {
                      const emptyMsg = document.createElement('p');
                      emptyMsg.className = 'text-center text-gray-500 text-xs italic mt-4';
                      emptyMsg.textContent = "No user uploads yet.";
@@ -841,7 +717,6 @@
 
             function renderLibrarySection(libraryData, mainTitle) {
                 if (Object.keys(libraryData).length === 0) return;
-                
                 const sectionTitle = document.createElement('h2');
                 sectionTitle.className = 'text-lg font-bold text-white mt-6 mb-2 border-b border-gray-700';
                 sectionTitle.textContent = mainTitle;
@@ -849,7 +724,6 @@
 
                 for (const [category, assets] of Object.entries(libraryData)) {
                     if (!assets || assets.length === 0) continue;
-
                     const catDiv = document.createElement('div');
                     catDiv.className = 'mb-4';
                     
@@ -864,14 +738,9 @@
                     assets.forEach(asset => {
                         const src = typeof asset === 'string' ? asset : asset.src;
                         const title = typeof asset === 'string' ? 'User Upload' : asset.name;
-                        
                         const img = document.createElement('img');
-                        img.src = src;
-                        img.title = title;
-                        
-                        // Extract filename from src to store for logic
-                        const filename = src.split('/').pop();
-                        img.setAttribute('data-logo-name', filename);
+                        img.src = src; img.title = title;
+                        img.setAttribute('data-logo-name', src.split('/').pop());
 
                         img.onerror = function() {
                              this.src = 'https://placehold.co/100x100/333/999?text=Not Found';
@@ -886,96 +755,72 @@
                 }
             }
 
-            // === UPLOAD FLOW ===
-
             function handleFileUpload(e) {
                 const files = e.target.files;
                 if (!files || files.length === 0) return;
-                
-                pendingUploadFiles = []; // Reset pending
+                pendingUploadFiles = []; 
                 let processedCount = 0;
 
                 Array.from(files).forEach(file => {
                     const reader = new FileReader();
                     reader.onload = (event) => {
-                        // Store the base64 data and the original filename
-                        pendingUploadFiles.push({
-                            src: event.target.result,
-                            name: file.name
-                        });
+                        pendingUploadFiles.push({ src: event.target.result, name: file.name });
                         processedCount++;
-                        if (processedCount === files.length) {
-                            openCategorizeModal();
-                        }
+                        if (processedCount === files.length) openCategorizeModal();
                     };
                     reader.readAsDataURL(file);
                 });
-                
                 e.target.value = ''; 
             }
 
             function openCategorizeModal() {
                 uploadCountSpan.textContent = pendingUploadFiles.length;
-                
-                // Populate Select Options
                 categorySelect.innerHTML = '';
-                const stdKeys = Object.keys(ASSET_LIBRARY);
-                const userKeys = Object.keys(getUserLibrary());
-                const allKeys = new Set([...stdKeys, ...userKeys]);
+                const allKeys = new Set([...Object.keys(ASSET_LIBRARY), ...Object.keys(getUserLibrary())]);
 
                 const defOpt = document.createElement('option');
                 defOpt.value = ""; defOpt.text = "-- Select Existing Category --";
                 defOpt.disabled = true; defOpt.selected = true;
                 categorySelect.appendChild(defOpt);
+                
                 allKeys.forEach(k => {
                     const opt = document.createElement('option');
                     opt.value = k; opt.text = k;
                     categorySelect.appendChild(opt);
                 });
+                
                 const newOpt = document.createElement('option');
                 newOpt.value = "NEW_CATEGORY_TRIGGER"; newOpt.text = "+ Create New Category...";
-                newOpt.style.fontWeight = "bold"; newOpt.style.color = "#4ade80"; // green-400
+                newOpt.style.fontWeight = "bold"; newOpt.style.color = "#4ade80"; 
                 categorySelect.appendChild(newOpt);
 
                 newCategoryInputContainer.classList.add('hidden');
                 newCategoryInput.value = "";
-                categorizeModal.style.display = 'flex'; // Show modal
+                categorizeModal.style.display = 'flex'; 
             }
 
             categorySelect.addEventListener('change', () => {
                 if (categorySelect.value === 'NEW_CATEGORY_TRIGGER') {
                     newCategoryInputContainer.classList.remove('hidden');
                     newCategoryInput.focus();
-                } else {
-                    newCategoryInputContainer.classList.add('hidden');
-                }
+                } else newCategoryInputContainer.classList.add('hidden');
             });
 
             saveUploadBtn.addEventListener('click', () => {
                 let targetCategory = categorySelect.value;
                 if (targetCategory === 'NEW_CATEGORY_TRIGGER') {
                     targetCategory = newCategoryInput.value.trim();
-                    if (!targetCategory) {
-                        newCategoryInput.focus();
-                        newCategoryInput.placeholder = "Category name cannot be empty!";
-                        return;
-                    }
+                    if (!targetCategory) return newCategoryInput.focus();
                 }
-                
-                if (!targetCategory || targetCategory === "") {
-                    categorySelect.focus();
-                    return;
-                }
+                if (!targetCategory) return categorySelect.focus();
 
                 const userLib = getUserLibrary();
                 if (!userLib[targetCategory]) userLib[targetCategory] = [];
-                // Save the {name, src} objects from pending uploads
                 userLib[targetCategory] = [...userLib[targetCategory], ...pendingUploadFiles];
                 
                 saveUserLibrary(userLib);
-                
                 categorizeModal.style.display = 'none';
-                renderAssetLibrary(); // Refresh grid
+                renderAssetLibrary(); 
             });
 
             cancelUploadBtn.addEventListener('click', () => {
@@ -983,11 +828,9 @@
                 categorizeModal.style.display = 'none';
             });
             
-            // === SMART HEADER LOGIC ===
             function toggleHeaderType(pageElement, isMedia) {
                 const newsHeader = pageElement.querySelector('.news-categories');
                 const corpHeader = pageElement.querySelector('.corporate-header');
-                
                 if (isMedia) {
                     newsHeader.classList.remove('hidden');
                     corpHeader.classList.add('hidden');
@@ -996,8 +839,6 @@
                     corpHeader.classList.remove('hidden');
                 }
             }
-
-            // === EVENT LISTENERS ===
 
             openLogoLibraryBtn.addEventListener('click', () => {
                 renderAssetLibrary();
@@ -1028,17 +869,15 @@
                     const logoName = clickedImg.getAttribute('data-logo-name');
                     
                     targetImg.src = clickedImg.src;
-                    targetImg.setAttribute('data-logo-name', logoName); // Store the name for logic
+                    targetImg.setAttribute('data-logo-name', logoName); 
                     targetImg.classList.remove('hidden');
                     
                     const placeholderText = currentImageTarget.querySelector('span');
                     if(placeholderText) placeholderText.style.display = 'none';
                     
-                    // === Smart Header Logic Check ===
                     if (currentImageTarget.title === "Main News Logo") {
                         const isMediaLogo = MEDIA_CORP_LOGOS.includes(logoName);
-                        const page = currentImageTarget.closest('.screamsheet-page');
-                        toggleHeaderType(page, isMediaLogo);
+                        toggleHeaderType(currentImageTarget.closest('.screamsheet-page'), isMediaLogo);
                     }
                     
                     logoModal.style.display = 'none';
@@ -1047,12 +886,9 @@
                 }
             });
             
-            // Add layout block buttons
             document.querySelectorAll('.add-layout-btn').forEach(btn => {
                 btn.addEventListener('click', () => {
-                    if (!currentActivePage) {
-                         createPage(); // Create a page if none exists
-                    }
+                    if (!currentActivePage) createPage(); 
                     const layoutTemplateId = btn.dataset.layout + '-template';
                     const template = document.getElementById(layoutTemplateId);
                     if (template) {
@@ -1064,54 +900,42 @@
                 });
             });
 
-            // Universal Click Handler for dynamic content
             documentContainer.addEventListener('click', (e) => {
                 const target = e.target;
-                
-                // Set active page
                 const clickedPage = target.closest('.screamsheet-page');
-                if (clickedPage && clickedPage !== currentActivePage) {
-                    setActivePage(clickedPage);
-                }
+                if (clickedPage && clickedPage !== currentActivePage) setActivePage(clickedPage);
 
-                // Remove Page
                 if (target.closest('.remove-page-btn')) {
                     if (document.querySelectorAll('.screamsheet-page').length > 1) {
-                         const pageToRemove = target.closest('.screamsheet-page');
-                         pageToRemove.remove();
-                         // Set new active page
+                         target.closest('.screamsheet-page').remove();
                          setActivePage(documentContainer.querySelector('.screamsheet-page'));
-                    } else {
-                        alert("You cannot delete the last page.");
-                    }
+                    } else alert("You cannot delete the last page.");
                     return;
                 }
                 
-                // Remove Layout Block
-                if (target.closest('.remove-layout-btn')) {
-                    target.closest('.layout-block').remove();
-                    return;
-                }
-
-                // Remove Article
-                if (target.closest('.remove-btn')) {
-                    target.closest('.article-block').remove();
-                    return;
-                }
+                if (target.closest('.remove-layout-btn')) return target.closest('.layout-block').remove();
+                if (target.closest('.remove-btn')) return target.closest('.article-block, .ad-block').remove();
                 
-                // Add Article
                 if (target.closest('.add-article-btn')) {
                     const column = target.closest('.layout-column');
                     if (column) {
                         const newArticle = articleTemplate.cloneNode(true);
                         newArticle.id = ''; newArticle.style.display = 'block';
-                        // Insert *before* the button
                         column.insertBefore(newArticle, target.closest('.add-article-btn'));
                     }
                     return;
                 }
+
+                if (target.closest('.add-ad-btn')) {
+                    const column = target.closest('.layout-column');
+                    if (column) {
+                        const newAd = adTemplate.cloneNode(true);
+                        newAd.id = ''; newAd.style.display = 'block';
+                        column.insertBefore(newAd, target.closest('.add-article-btn'));
+                    }
+                    return;
+                }
                 
-                // Toggle News Category
                 if (target.closest('.news-category')) {
                     const cat = target.closest('.news-category');
                     cat.parentElement.querySelectorAll('.news-category').forEach(c => c.classList.remove('active'));
@@ -1119,7 +943,6 @@
                     return;
                 }
                 
-                // Open Logo Library for Image Placeholder
                 if (target.closest('.image-placeholder')) {
                     document.querySelectorAll('.image-placeholder.is-targeting').forEach(el => el.classList.remove('is-targeting'));
                     currentImageTarget = target.closest('.image-placeholder');
@@ -1130,9 +953,49 @@
                 }
             });
 
-            printBtn.addEventListener('click', () => window.print());
+            // High-Fidelity PDF Export Logic using html2canvas & jsPDF
+            printBtn.addEventListener('click', async () => {
+                const originalText = printBtn.innerText;
+                printBtn.innerText = "Generating PDF...";
+                printBtn.disabled = true;
 
-            // --- App Initialization ---
+                try {
+                    const { jsPDF } = window.jspdf;
+                    const pages = document.querySelectorAll('.screamsheet-page');
+                    const pdf = new jsPDF('p', 'mm', 'a4'); 
+
+                    for (let i = 0; i < pages.length; i++) {
+                        // Temporarily hide UI elements
+                        const removeBtns = pages[i].querySelectorAll('.remove-btn, .remove-layout-btn, .add-article-btn, .add-ad-btn, .remove-page-btn');
+                        removeBtns.forEach(btn => btn.style.display = 'none');
+                        pages[i].style.boxShadow = 'none'; // Remove red border outline for export
+
+                        const canvas = await html2canvas(pages[i], { 
+                            scale: 2, // High resolution
+                            useCORS: true,
+                            backgroundColor: getComputedStyle(pages[i]).backgroundColor
+                        });
+                        
+                        const imgData = canvas.toDataURL('image/jpeg', 1.0);
+                        if (i > 0) pdf.addPage();
+                        pdf.addImage(imgData, 'JPEG', 0, 0, 210, 297);
+
+                        // Restore UI elements
+                        removeBtns.forEach(btn => btn.style.display = '');
+                        pages[i].style.boxShadow = '';
+                    }
+
+                    pdf.save('NCT-Screamsheet.pdf');
+                } catch (error) {
+                    console.error("PDF Generation failed", error);
+                    alert("There was an error generating your PDF. Check the console for details.");
+                } finally {
+                    printBtn.innerText = originalText;
+                    printBtn.disabled = false;
+                    setActivePage(currentActivePage); // Restore the red highlight
+                }
+            });
+
             createPage(); 
         });
     </script>
