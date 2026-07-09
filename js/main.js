@@ -40,6 +40,7 @@ const els = {
   fontSmallerBtn: document.getElementById('font-smaller-btn'),
   fontLargerBtn: document.getElementById('font-larger-btn'),
   autoFlowToggle: document.getElementById('auto-flow-toggle'),
+  blockAutoFlowToggle: document.getElementById('block-auto-flow-toggle'),
   reflowNowBtn: document.getElementById('reflow-now-btn'),
   blockXInput: document.getElementById('block-x-input'),
   blockYInput: document.getElementById('block-y-input'),
@@ -139,6 +140,7 @@ function bindEvents() {
   els.fontLargerBtn.addEventListener('click', () => stepSelectedFontSize(1));
   els.reflowNowBtn.addEventListener('click', () => runLayoutMaintenance({ forcePagination: true }));
   els.autoFlowToggle.addEventListener('change', () => queueAutosave());
+  els.blockAutoFlowToggle?.addEventListener('change', applySelectedBlockAutoFlow);
   els.applyPositionBtn?.addEventListener('click', applyFreeLayoutInputs);
   els.bringForwardBtn?.addEventListener('click', () => stepBlockZIndex(1));
   els.sendBackwardBtn?.addEventListener('click', () => stepBlockZIndex(-1));
@@ -209,6 +211,7 @@ function setActiveBlock(block) {
     els.spanSelect.value = ['span-1', 'span-2', 'span-all', 'span-compact'].includes(spanClass) ? spanClass : 'span-1';
     syncFontControlsFromBlock(activeBlock);
     syncFreeControlsFromBlock(activeBlock);
+    syncAutoFlowControlFromBlock(activeBlock);
   }
 }
 
@@ -257,7 +260,7 @@ function addSelectedBlock() {
   target.insertAdjacentHTML('beforeend', createBlock(els.blockSelect.value));
   hydratePage(activePage);
   const added = target.querySelector('.block:last-of-type');
-  if (added && isFreeLayoutContainer(target)) placeBlockInFreeLayout(added, target);
+  if (added && (isFreeLayoutContainer(target) || target.classList.contains('manual-canvas'))) placeBlockInFreeLayout(added, target);
   if (added) setActiveBlock(added);
   queueAutosave();
 }
@@ -286,7 +289,12 @@ function hydratePage(page) {
       block.append(resize);
     }
   });
-  page.querySelectorAll('.sheet-grid, .sheet-body').forEach(grid => grid.classList.add('drop-container'));
+  page.querySelectorAll('.sheet-grid, .sheet-body').forEach(grid => {
+    grid.classList.add('drop-container');
+    if (grid.classList.contains('free-layout') || grid.querySelector(':scope > .block[data-free-w], :scope > .block.manual-positioned')) {
+      enableManualPositioning(grid);
+    }
+  });
 }
 
 function getLayoutClass(el) {
@@ -301,6 +309,7 @@ function setLayoutClass(el, layoutClass) {
 function applySelectedLayout() {
   if (!activePage) return;
   const target = activeGrid && activePage.contains(activeGrid) ? activeGrid : activePage.querySelector('.sheet-body');
+  if (els.layoutSelect.value === 'free-layout') enableManualPositioning(target);
   setLayoutClass(target, els.layoutSelect.value);
   if (els.layoutSelect.value === 'free-layout') initializeFreeLayout(target);
   setActiveGrid(target);
@@ -340,9 +349,13 @@ function moveActiveBlock(direction) {
 function duplicateActiveBlock() {
   if (!activeBlock) return;
   const clone = activeBlock.cloneNode(true);
-  clone.classList.remove('selected-block', 'dragging');
+  clone.classList.remove('selected-block', 'dragging', 'free-collision');
   activeBlock.after(clone);
   hydratePage(activePage || clone.closest('.sheet-page'));
+  if (isFreeLayoutBlock(activeBlock) || activeBlock.parentElement?.classList.contains('manual-canvas')) {
+    const box = readBlockBox(activeBlock);
+    applyCandidateBox(clone, { ...box, x: box.x + 20, y: box.y + 20 }, { allowOverlap: false }) || placeBlockInFreeLayout(clone, clone.parentElement, { basis: box });
+  }
   setActiveBlock(clone);
   queueAutosave();
 }
@@ -429,8 +442,12 @@ function isFreeLayoutContainer(container) {
   return Boolean(container?.classList?.contains('free-layout'));
 }
 
+function isPositionableContainer(container) {
+  return Boolean(container?.matches?.('.sheet-grid, .sheet-body'));
+}
+
 function isFreeLayoutBlock(block) {
-  return Boolean(block?.parentElement?.classList?.contains('free-layout'));
+  return Boolean(block?.classList?.contains('manual-positioned') || block?.parentElement?.classList?.contains('free-layout'));
 }
 
 function getSnapValue() {
@@ -441,16 +458,55 @@ function snapNumber(value, snap = getSnapValue()) {
   return Math.round(value / snap) * snap;
 }
 
-function readBlockBox(block) {
+function readVisualBox(block) {
+  const container = block.parentElement;
+  const parentRect = container?.getBoundingClientRect?.();
+  const rect = block.getBoundingClientRect();
+  if (!container || !parentRect || !rect.width || !rect.height) {
+    return {
+      x: parseFloat(block.dataset.freeX || block.style.getPropertyValue('--free-x')) || 0,
+      y: parseFloat(block.dataset.freeY || block.style.getPropertyValue('--free-y')) || 0,
+      w: parseFloat(block.dataset.freeW || block.style.getPropertyValue('--free-w')) || block.offsetWidth || 260,
+      h: parseFloat(block.dataset.freeH || block.style.getPropertyValue('--free-h')) || block.offsetHeight || 170
+    };
+  }
   return {
-    x: parseFloat(block.dataset.freeX || block.style.getPropertyValue('--free-x')) || 0,
-    y: parseFloat(block.dataset.freeY || block.style.getPropertyValue('--free-y')) || 0,
-    w: parseFloat(block.dataset.freeW || block.style.getPropertyValue('--free-w')) || block.offsetWidth || 260,
-    h: parseFloat(block.dataset.freeH || block.style.getPropertyValue('--free-h')) || block.offsetHeight || 170
+    x: rect.left - parentRect.left + container.scrollLeft,
+    y: rect.top - parentRect.top + container.scrollTop,
+    w: rect.width,
+    h: rect.height
   };
 }
 
+function readBlockBox(block) {
+  const hasStoredBox = block.dataset.freeW || block.style.getPropertyValue('--free-w');
+  if (hasStoredBox || block.classList.contains('manual-positioned') || isFreeLayoutContainer(block.parentElement)) {
+    return {
+      x: parseFloat(block.dataset.freeX || block.style.getPropertyValue('--free-x')) || 0,
+      y: parseFloat(block.dataset.freeY || block.style.getPropertyValue('--free-y')) || 0,
+      w: parseFloat(block.dataset.freeW || block.style.getPropertyValue('--free-w')) || block.offsetWidth || 260,
+      h: parseFloat(block.dataset.freeH || block.style.getPropertyValue('--free-h')) || block.offsetHeight || 170
+    };
+  }
+  return readVisualBox(block);
+}
+
+function updateContainerManualHeight(container) {
+  if (!isPositionableContainer(container)) return;
+  const blocks = Array.from(container.children).filter(el => el.classList?.contains('block') && (el.classList.contains('manual-positioned') || el.dataset.freeW));
+  const bottom = blocks.reduce((max, block) => {
+    const box = readBlockBox(block);
+    return Math.max(max, box.y + box.h);
+  }, 0);
+  const current = container.clientHeight || 0;
+  const min = Math.max(current, bottom + 24, isFreeLayoutContainer(container) ? 620 : 280);
+  container.style.minHeight = `${Math.round(min)}px`;
+}
+
 function writeBlockBox(block, box) {
+  const container = block.parentElement;
+  if (isPositionableContainer(container)) container.classList.add('manual-canvas');
+  block.classList.add('manual-positioned');
   const clean = {
     x: Math.round(box.x),
     y: Math.round(box.y),
@@ -465,13 +521,27 @@ function writeBlockBox(block, box) {
   block.style.setProperty('--free-y', `${clean.y}px`);
   block.style.setProperty('--free-w', `${clean.w}px`);
   block.style.setProperty('--free-h', `${clean.h}px`);
+  updateContainerManualHeight(container);
+}
+
+function enableManualPositioning(container) {
+  if (!isPositionableContainer(container)) return;
+  const blocks = Array.from(container.children).filter(el => el.classList?.contains('block'));
+  if (!blocks.length) {
+    container.classList.add('manual-canvas');
+    return;
+  }
+  const boxes = blocks.map(block => readBlockBox(block));
+  container.classList.add('manual-canvas');
+  blocks.forEach((block, index) => writeBlockBox(block, boxes[index]));
+  updateContainerManualHeight(container);
 }
 
 function clampBoxToContainer(box, container) {
   const width = Math.max(80, container.clientWidth || 640);
   const height = Math.max(80, container.clientHeight || 740);
   const w = clampNumber(box.w, 80, width, 260);
-  const h = clampNumber(box.h, 60, height, 170);
+  const h = clampNumber(box.h, 60, Math.max(60, height), 170);
   return {
     x: clampNumber(box.x, 0, Math.max(0, width - w), 0),
     y: clampNumber(box.y, 0, Math.max(0, height - h), 0),
@@ -486,16 +556,16 @@ function boxesOverlap(a, b) {
 
 function wouldOverlap(block, candidate) {
   const container = block.parentElement;
-  if (!isFreeLayoutContainer(container)) return false;
+  if (!isPositionableContainer(container)) return false;
   return Array.from(container.children).some(other => {
-    if (other === block || !other.classList?.contains('block')) return false;
+    if (other === block || !other.classList?.contains('block') || other.offsetParent === null) return false;
     return boxesOverlap(candidate, readBlockBox(other));
   });
 }
 
 function applyCandidateBox(block, candidate, { allowOverlap = false } = {}) {
   const container = block.parentElement;
-  if (!isFreeLayoutContainer(container)) return false;
+  if (!isPositionableContainer(container)) return false;
   const box = clampBoxToContainer(candidate, container);
   if (!allowOverlap && wouldOverlap(block, box)) {
     block.classList.add('free-collision');
@@ -509,34 +579,30 @@ function applyCandidateBox(block, candidate, { allowOverlap = false } = {}) {
 
 function initializeFreeLayout(container) {
   if (!container) return;
-  container.querySelectorAll(':scope > .block').forEach((block, index) => {
-    if (!block.dataset.freeW) {
-      const col = index % 2;
-      const row = Math.floor(index / 2);
-      applyCandidateBox(block, {
-        x: 10 + col * 280,
-        y: 10 + row * 190,
-        w: 260,
-        h: 170
-      }, { allowOverlap: true });
-    }
-  });
+  enableManualPositioning(container);
 }
 
-function placeBlockInFreeLayout(block, container) {
-  const baseW = Math.min(300, Math.max(180, (container.clientWidth || 640) / 2 - 20));
-  const baseH = block.classList.contains('lead-block') ? 230 : block.classList.contains('hero-image-block') ? 260 : 170;
+function placeBlockInFreeLayout(block, container, options = {}) {
+  if (!isPositionableContainer(container)) return false;
+  if (!container.classList.contains('manual-canvas') && isFreeLayoutContainer(container)) enableManualPositioning(container);
+  const basis = options.basis || readBlockBox(block);
+  const baseW = Math.min(Math.max(180, basis.w || 260), Math.max(180, (container.clientWidth || 640) - 20));
+  const baseH = Math.min(Math.max(80, basis.h || (block.classList.contains('lead-block') ? 230 : block.classList.contains('hero-image-block') ? 260 : 170)), Math.max(80, (container.clientHeight || 760) - 20));
   const snap = getSnapValue();
-  for (let y = 10; y < (container.clientHeight || 760) - baseH; y += snap * 2) {
+  const startY = Math.max(10, options.afterBox ? options.afterBox.y + options.afterBox.h + snap : 10);
+  const yStops = [];
+  for (let y = startY; y < (container.clientHeight || 760) - baseH; y += snap * 2) yStops.push(y);
+  for (let y = 10; y < Math.min(startY, (container.clientHeight || 760) - baseH); y += snap * 2) yStops.push(y);
+  for (const y of yStops) {
     for (let x = 10; x < (container.clientWidth || 640) - baseW; x += snap * 2) {
       const candidate = { x, y, w: baseW, h: baseH };
       if (!wouldOverlap(block, candidate)) {
         writeBlockBox(block, candidate);
-        return;
+        return true;
       }
     }
   }
-  writeBlockBox(block, { x: 10, y: 10, w: baseW, h: baseH });
+  return false;
 }
 
 function syncFreeControlsFromBlock(block) {
@@ -549,12 +615,25 @@ function syncFreeControlsFromBlock(block) {
   if (els.lockBlockToggle) els.lockBlockToggle.checked = block.classList.contains('block-locked');
 }
 
+function syncAutoFlowControlFromBlock(block) {
+  if (!els.blockAutoFlowToggle) return;
+  els.blockAutoFlowToggle.checked = block ? block.dataset.autoFlow !== 'off' : true;
+}
+
+function applySelectedBlockAutoFlow() {
+  if (!activeBlock || !els.blockAutoFlowToggle) return;
+  activeBlock.dataset.autoFlow = els.blockAutoFlowToggle.checked ? 'on' : 'off';
+  queueAutosave();
+}
+
 function applyFreeLayoutInputs() {
-  if (!activeBlock || !isFreeLayoutBlock(activeBlock)) {
-    alert('Select a block inside a Free layout section first.');
+  if (!activeBlock) {
+    alert('Select a block first.');
     return;
   }
   const snap = getSnapValue();
+  const container = activeBlock.parentElement;
+  enableManualPositioning(container);
   const candidate = {
     x: snapNumber(Number(els.blockXInput.value), snap),
     y: snapNumber(Number(els.blockYInput.value), snap),
@@ -566,7 +645,8 @@ function applyFreeLayoutInputs() {
 }
 
 function stepBlockZIndex(delta) {
-  if (!activeBlock || !isFreeLayoutBlock(activeBlock)) return;
+  if (!activeBlock) return;
+  enableManualPositioning(activeBlock.parentElement);
   const current = Number(activeBlock.style.zIndex || activeBlock.dataset.zIndex || 1);
   const next = clampNumber(current + delta, 1, 99, 1);
   activeBlock.style.zIndex = String(next);
@@ -586,10 +666,11 @@ function handleFreePointerDown(event) {
   const handle = dragHandle || resizeHandle;
   if (!handle) return;
   const block = handle.closest('.block');
-  if (!block || !isFreeLayoutBlock(block)) return;
+  if (!block || !isPositionableContainer(block.parentElement)) return;
   event.preventDefault();
   if (block.classList.contains('block-locked')) return;
   setActiveBlock(block);
+  enableManualPositioning(block.parentElement);
   const start = readBlockBox(block);
   freePointerState = {
     block,
@@ -1110,18 +1191,21 @@ function paginateOverflow() {
 
 function pageOverflows(page) {
   const body = page.querySelector('.sheet-body');
-  if (!body || body.classList.contains('free-layout')) return false;
-  return body.scrollHeight > body.clientHeight + 6;
+  if (!body) return false;
+  return body.scrollHeight > body.clientHeight + 6 || Boolean(findOverflowingBlock(page));
 }
 
 function pushOverflowFromPage(page) {
+  const overflowing = findOverflowingBlock(page);
+  if (overflowing) return continueOverflowingBlock(overflowing);
+
   const block = findLastMovableBlock(page);
   if (!block) return false;
   const parent = block.parentElement;
   const parentColumns = getGridColumnCount(parent);
   const canSplit = isSplittableBlock(block);
 
-  if (canSplit && parentColumns > 1 && !block.classList.contains('flow-continuation') && !block.nextElementSibling) {
+  if (canSplit && parentColumns > 1 && !isFreeLayoutBlock(block) && !block.classList.contains('flow-continuation') && !block.nextElementSibling) {
     const continuation = splitBlock(block, { samePage: true });
     if (continuation) {
       block.after(continuation);
@@ -1132,22 +1216,86 @@ function pushOverflowFromPage(page) {
 
   if (canSplit) {
     const continuation = splitBlock(block, { samePage: false });
-    if (continuation) {
-      const target = getContinuationTarget(page, parent);
-      target.prepend(continuation);
-      hydratePage(target.closest('.sheet-page'));
-      return true;
-    }
+    if (continuation) return placeContinuation(block, continuation);
   }
 
   const target = getContinuationTarget(page, parent);
-  target.prepend(block);
+  if (isFreeLayoutContainer(parent) || parent.classList.contains('manual-canvas')) {
+    const oldBox = readBlockBox(block);
+    target.prepend(block);
+    hydratePage(target.closest('.sheet-page'));
+    placeBlockInFreeLayout(block, target, { basis: oldBox }) || markPageOverflow(target.closest('.sheet-page'));
+  } else {
+    target.prepend(block);
+    hydratePage(target.closest('.sheet-page'));
+  }
+  return true;
+}
+
+function findOverflowingBlock(page) {
+  const blocks = Array.from(page.querySelectorAll('.sheet-body .block')).filter(block => !block.closest('.mission-cover'));
+  return blocks.find(blockContentOverflows) || null;
+}
+
+function blockContentOverflows(block) {
+  if (block.dataset.autoFlow === 'off' || !isSplittableBlock(block)) return false;
+  const content = getSplittableContent(block);
+  if (!content || !content.textContent.trim()) return false;
+  const blockBox = block.getBoundingClientRect();
+  const contentBox = content.getBoundingClientRect();
+  if (!blockBox.height || !contentBox.height) return false;
+  if (isFreeLayoutBlock(block) || block.style.height || block.dataset.freeH) {
+    return contentBox.bottom > blockBox.bottom - 12 || block.scrollHeight > block.clientHeight + 8;
+  }
+  return false;
+}
+
+function continueOverflowingBlock(block) {
+  const continuation = splitBlock(block, { samePage: true });
+  if (!continuation) {
+    block.classList.add('flow-warning');
+    return false;
+  }
+  return placeContinuation(block, continuation);
+}
+
+function placeContinuation(sourceBlock, continuation) {
+  const sourcePage = sourceBlock.closest('.sheet-page');
+  const parent = sourceBlock.parentElement;
+  const sourceBox = readBlockBox(sourceBlock);
+  continuation.classList.add('flow-continuation');
+  continuation.dataset.autoFlow = sourceBlock.dataset.autoFlow || 'on';
+
+  if (isFreeLayoutContainer(parent) || parent.classList.contains('manual-canvas') || isFreeLayoutBlock(sourceBlock)) {
+    sourceBlock.after(continuation);
+    hydratePage(sourcePage);
+    if (placeBlockInFreeLayout(continuation, parent, { basis: sourceBox, afterBox: sourceBox })) return true;
+    continuation.remove();
+    const target = getContinuationTarget(sourcePage, parent);
+    target.prepend(continuation);
+    hydratePage(target.closest('.sheet-page'));
+    enableManualPositioning(target);
+    if (!placeBlockInFreeLayout(continuation, target, { basis: sourceBox })) {
+      markPageOverflow(target.closest('.sheet-page'));
+    }
+    return true;
+  }
+
+  const parentColumns = getGridColumnCount(parent);
+  if (parentColumns > 1 && !sourceBlock.classList.contains('flow-continuation') && !sourceBlock.nextElementSibling) {
+    sourceBlock.after(continuation);
+    hydratePage(sourcePage);
+    return true;
+  }
+
+  const target = getContinuationTarget(sourcePage, parent);
+  target.prepend(continuation);
   hydratePage(target.closest('.sheet-page'));
   return true;
 }
 
 function findLastMovableBlock(page) {
-  const blocks = Array.from(page.querySelectorAll('.sheet-body .block')).filter(block => !block.closest('.mission-cover'));
+  const blocks = Array.from(page.querySelectorAll('.sheet-body .block')).filter(block => !block.closest('.mission-cover') && !block.classList.contains('block-locked'));
   return blocks.reverse().find(block => block.offsetParent !== null) || null;
 }
 
@@ -1164,9 +1312,19 @@ function splitBlock(block, { samePage }) {
   if (!content) return null;
   const movableNodes = Array.from(content.childNodes).filter(node => node.nodeType === Node.ELEMENT_NODE || (node.nodeType === Node.TEXT_NODE && node.textContent.trim()));
   const clone = block.cloneNode(true);
-  clone.classList.remove('selected-block', 'dragging', 'drag-over');
+  clone.classList.remove('selected-block', 'dragging', 'drag-over', 'free-collision');
   clone.classList.add('flow-continuation');
-  clone.querySelectorAll('.block-drag').forEach(el => el.remove());
+  clone.querySelectorAll('.block-drag, .block-resize').forEach(el => el.remove());
+  clone.removeAttribute('data-free-x');
+  clone.removeAttribute('data-free-y');
+  clone.removeAttribute('data-free-w');
+  clone.removeAttribute('data-free-h');
+  clone.style.removeProperty('--free-x');
+  clone.style.removeProperty('--free-y');
+  clone.style.removeProperty('--free-w');
+  clone.style.removeProperty('--free-h');
+  clone.style.removeProperty('z-index');
+  clone.classList.remove('manual-positioned');
   const cloneContent = getSplittableContent(clone);
   if (!cloneContent) return null;
   cloneContent.innerHTML = '';
@@ -1197,13 +1355,19 @@ function getContinuationTarget(sourcePage, sourceContainer) {
   const nextPage = getOrCreateNextPage(sourcePage);
   const nextBody = nextPage.querySelector('.sheet-body');
   const layout = getLayoutClass(sourceContainer) || 'grid-1';
-  if (sourceContainer.matches('.sheet-body')) return nextBody;
+  const manual = sourceContainer.classList.contains('manual-canvas') || sourceContainer.classList.contains('free-layout');
+  if (sourceContainer.matches('.sheet-body')) {
+    if (layout && layout !== getLayoutClass(nextBody)) setLayoutClass(nextBody, layout);
+    if (manual) enableManualPositioning(nextBody);
+    return nextBody;
+  }
   let section = nextBody.querySelector(`.sheet-grid.${layout}.flow-target`);
   if (!section) {
     section = document.createElement('section');
     section.className = `sheet-grid drop-container flow-target ${layout}`;
     nextBody.prepend(section);
   }
+  if (manual) enableManualPositioning(section);
   return section;
 }
 
@@ -1229,14 +1393,15 @@ function getGridColumnCount(container) {
 }
 
 function markPageOverflow(page) {
-  page.classList.add('flow-warning');
-  if (!page.querySelector('.flow-note')) {
+  page?.classList.add('flow-warning');
+  if (page && !page.querySelector('.flow-note')) {
     const note = document.createElement('span');
     note.className = 'flow-note control-only';
-    note.textContent = 'Overflow could not be fully resolved. Reduce font size, image height, or block count.';
+    note.textContent = 'Overflow could not be fully resolved. Reduce font size, resize blocks, or add space for continuations.';
     page.querySelector('.sheet-body')?.appendChild(note);
   }
 }
+
 
 
 async function exportPdf() {

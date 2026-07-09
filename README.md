@@ -1,36 +1,30 @@
-# Screamsheet Generator — Vanilla Layout V3
+# Screamsheet Generator — Vanilla Layout V4
 
 Static Cyberpunk RED screamsheet editor. Open `index.html` directly or host the folder as a static site.
 
-## Main changes in V3
+## Main changes in V4
 
-- Replaced the crowded top toolbar with a left sidebar.
-- Sidebar tools are grouped into accordion sections:
-  - Document
-  - Pages & Templates
-  - Page Layout
-  - Add Blocks
-  - Selected Block
-  - Images
-  - Markdown
-  - Export & Files
-- Added `Free layout` mode for granular block placement.
-- Free-layout blocks can be dragged and resized with no-overlap collision checks.
-- Added exact X/Y/W/H controls for selected free-layout blocks.
-- Added snap-to-grid, lock/unlock, and z-order controls.
-- Added automatic Markdown recognition on paste/blur.
-- Added manual `Apply Markdown to Selection` command.
-- Preserved PDF export, print fallback, project JSON save/load, image library, font-size controls, and newspaper overflow behavior.
+- Granular block movement is now available in **all** layouts, not only `Free layout`.
+- Layout presets now behave as starting guides/arrangements. They no longer prevent manual positioning.
+- Any selected block can be:
+  - dragged with the `☰` handle;
+  - resized with the lower-right resize handle;
+  - positioned by exact `X / Y / W / H` values;
+  - snapped to grid;
+  - locked/unlocked;
+  - moved forward/backward in z-order.
+- Collision checks apply to manual movement and resizing so blocks cannot be placed over each other.
+- `Free layout` now also participates in auto-flow.
+- Auto-flow now checks both page overflow and text overflow inside positioned blocks.
+- Added a selected-block auto-flow toggle so specific blocks can opt out.
+- Renamed the geometry controls from “Free layout geometry” to “Block geometry.”
+- Preserved the sidebar accordion UI, Markdown recognition, image controls, font-size controls, project JSON save/load, PDF export, and print fallback.
 
-## Layout modes
+## Layout behavior
 
-### Newspaper layouts
+All layouts support manual arrangement. `1 column`, `2 columns`, `3 columns`, sidebar, feature, map, and `Free layout` control the initial structure and page guides, but individual blocks can still be moved and resized.
 
-Use `1 column`, `2 columns`, `3 columns`, sidebar, feature, and map layouts for article-heavy pages. These support automatic overflow into later columns/pages.
-
-### Free layout
-
-Use `Free layout` for front pages, ad pages, maps, covers, and hand-tuned compositions. Blocks can be positioned manually. Text overflow is not automatically reflowed in this mode; resize the block or create another block.
+When auto-flow is enabled, long text continues into a continuation block. The app first tries to place the continuation into safe empty space on the same page; if there is no non-overlapping space, it creates or uses a following page.
 
 ## Markdown support
 
@@ -46,7 +40,7 @@ When `Auto-apply Markdown on paste/blur` is enabled, the editor recognizes:
 - `1. numbered` lists
 - `> quote` blocks
 
-Markdown conversion is sanitized before being inserted.
+Markdown conversion is sanitized before insertion.
 
 ## PDF export
 
