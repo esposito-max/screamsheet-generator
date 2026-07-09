@@ -1,29 +1,24 @@
-# Screamsheet Generator V8 — Vanilla / established stack
+# Screamsheet Generator V11 — Vanilla
 
-This package contains the V8 Screamsheet Generator.
+Static HTML/CSS/JS Screamsheet generator for Cyberpunk RED campaign handouts.
 
-## V8 changes
+## Use
 
-- Page templates now start empty. They provide a page/layout structure only; they do not auto-insert sample blocks.
-- The global **Reflow Now** command has been removed.
-- Added non-destructive **Show Overflow Warnings**.
-- Added selected-block scoped **Flow Selected Text Block**.
-- Manual movement, resizing, exact geometry controls, image support, Markdown conversion, project save/load, and PDF export remain available.
-- Export remains read-only: failed export attempts should not mutate the editor state.
+Open `index.html` in a browser or host the folder as static files.
 
-## Layout behavior
+## V11 rebuild notes
 
-Templates and layout presets are starting structures/guides. Add the blocks you need from the **Add Blocks** section, then move/resize them manually as needed.
+- Clean canvas architecture: every block is an independent positioned object.
+- Templates are blank: they create page chrome and guide overlays only, never body blocks.
+- No global reflow and no destructive automatic pagination.
+- Optional visual guide overlays: blank, two columns, three columns, feature split, map + notes, grid.
+- Screamsheet-fidelity chrome for Night City Today, The Augmented Optic, Public Advisory, Mission Packet, and Minimal Print.
+- Styled blocks: Lead, Article, Briefs, Ad, Warning, Pull Quote, Image, Map, Q&A, Timeline, Stat, Links.
+- Markdown conversion for text blocks.
+- Font-size controls, X/Y/W/H geometry, z-order, lock, duplicate, delete.
+- PDF export renders from state and does not mutate the editor.
+- Uses `sgV11` localStorage key so old broken V-series drafts are not loaded automatically.
 
-Text continuation is deliberately scoped to the selected block. No command should restructure the entire document unless you deliberately reset or rebuild a page.
+## Tested
 
-## Testing
-
-See `V8_TEST_REPORT.txt` for the browser interaction checks run against both the Vanilla and Svelte root builds.
-
-
-## V9 blank-template correction
-
-- Templates now create truly blank pages: zero blocks and zero real placeholder/drop-zone sections.
-- Empty-page hints are CSS-only overlays. They do not occupy layout space, cannot be selected, cannot overlap, and are not exported as blocks.
-- Layout presets set the initial page guide only; all content is added manually through Add Blocks.
+See `V11_TEST_REPORT.json`.
