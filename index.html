@@ -22,18 +22,21 @@
         /* --- Screamsheet Page Styles --- */
         .screamsheet-page {
             /* Theme variables */
-            --theme-primary: #c56aad; /* NCT Pink */
-            --theme-secondary: #9c7bb6; /* NCT Purple */
+            --theme-primary: #c56aad; 
+            --theme-secondary: #9c7bb6; 
             --theme-text-on-secondary: #ffffff; 
             --theme-text-on-primary: #ffffff; 
             --theme-page-bg: #ffffff; 
             --theme-page-text: #000000; 
-            --theme-byline-bg: #f0e6f2; /* Light Pink/Purple */
-            --theme-link-text: #5b9dd4; /* Blue */
+            --theme-byline-bg: #f0e6f2; 
+            --theme-link-text: #5b9dd4; 
 
             width: 100%;
             max-width: 210mm;
+            /* Set a minimum height of A4, but allow it to grow infinitely */
             min-height: 297mm;
+            height: auto; 
+            
             background-color: var(--theme-page-bg);
             color: var(--theme-page-text);
             box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
@@ -274,7 +277,9 @@
                 box-shadow: none !important; 
                 margin: 0 !important; 
                 width: 210mm !important;
-                height: 297mm !important; 
+                /* Inherit the dynamic height calculated by JS, maintaining A4 minimum */
+                height: auto !important; 
+                min-height: 297mm !important; 
                 max-width: none !important;
                 page-break-after: always;
                 break-after: page;
@@ -291,7 +296,8 @@
             [contenteditable="true"]:focus { outline: none; background-color: transparent; }
             .layout-block { border: none !important; padding: 0 !important; }
         }
-
+        
+        /* Default print size (dynamically overridden by JS) */
         @page { 
             size: A4; 
             margin: 0; 
@@ -989,8 +995,34 @@
                 }
             });
 
-            // Trigger the native browser print dialog
-            printBtn.addEventListener('click', () => window.print());
+            // Dynamic Print Size Injection
+            printBtn.addEventListener('click', () => {
+                let maxPxHeight = 0;
+                document.querySelectorAll('.screamsheet-page').forEach(page => {
+                    // Check physical rendered height
+                    const h = Math.max(page.offsetHeight, page.scrollHeight);
+                    if (h > maxPxHeight) maxPxHeight = h;
+                });
+                
+                // Convert px to mm (96 DPI is standard browser assumed resolution)
+                // Add a small 1mm buffer to prevent unwanted blank pages
+                const mmHeight = Math.ceil((maxPxHeight * 25.4) / 96);
+                
+                let styleEl = document.getElementById('dynamic-print-style');
+                if (!styleEl) {
+                    styleEl = document.createElement('style');
+                    styleEl.id = 'dynamic-print-style';
+                    document.head.appendChild(styleEl);
+                }
+                
+                // Inject the dynamic @page size
+                styleEl.innerHTML = `@media print { @page { size: 210mm ${mmHeight}mm; margin: 0; } }`;
+                
+                // Slight delay to ensure the browser paints the new @page style
+                setTimeout(() => {
+                    window.print();
+                }, 100);
+            });
 
             createPage(); 
         });
