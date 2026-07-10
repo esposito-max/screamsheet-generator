@@ -4,17 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Screamsheet Editor</title>
-    <!-- Load Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Load Inter font -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
     
-    <!-- PDF Generation Libraries -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-
     <style>
         /* Use Inter as the default font */
         body { font-family: 'Inter', sans-serif; }
@@ -253,11 +247,60 @@
         }
         .logo-grid img:hover { transform: scale(1.05); border-color: var(--theme-primary); }
 
+        /* --- Native High-Fidelity Print Styles --- */
+        @media print {
+            * {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+
+            #editor-ui, .modal-overlay, .add-article-btn, .add-ad-btn, 
+            .remove-btn, .remove-layout-btn, .remove-page-btn { 
+                display: none !important; 
+            }
+
+            body { 
+                background-color: transparent !important; 
+                margin: 0; 
+                padding: 0; 
+            }
+            
+            #document-container { 
+                margin: 0; 
+                padding: 0; 
+            }
+
+            .screamsheet-page {
+                box-shadow: none !important; 
+                margin: 0 !important; 
+                width: 210mm !important;
+                height: 297mm !important; 
+                max-width: none !important;
+                page-break-after: always;
+                break-after: page;
+                overflow: hidden; 
+            }
+            
+            .screamsheet-page:last-child { 
+                page-break-after: auto; 
+                break-after: auto;
+            }
+            
+            .image-placeholder { border: none !important; background: transparent !important; }
+            .image-placeholder span, [contenteditable="true"]:empty:before { display: none !important; }
+            [contenteditable="true"]:focus { outline: none; background-color: transparent; }
+            .layout-block { border: none !important; padding: 0 !important; }
+        }
+
+        @page { 
+            size: A4; 
+            margin: 0; 
+        }
+
     </style>
 </head>
 <body class="bg-zinc-900 text-white">
 
-    <!-- === EDITOR UI (TOOLBAR) === -->
     <div id="editor-ui" class="bg-zinc-800 p-2 sm:p-4 sticky top-0 z-50 shadow-lg flex flex-wrap gap-2 sm:gap-4 items-center justify-center">
         <span class="text-lg font-bold text-red-500 hidden sm:inline">SCREAMSHEET EDITOR</span>
         
@@ -274,7 +317,6 @@
             <button class="add-layout-btn bg-gray-600 hover:bg-gray-500 text-white font-bold py-1 px-2 rounded-md text-sm transition-colors" data-layout="layout-1-col" title="Add 1-Column Block">1 Col</button>
             <button class="add-layout-btn bg-gray-600 hover:bg-gray-500 text-white font-bold py-1 px-2 rounded-md text-sm transition-colors" data-layout="layout-2-col" title="Add 2-Column Block">2 Col</button>
             <button class="add-layout-btn bg-gray-600 hover:bg-gray-500 text-white font-bold py-1 px-2 rounded-md text-sm transition-colors" data-layout="layout-sidebar-right" title="Add Sidebar Right Block">Sidebar</button>
-            <!-- New Grid Button -->
             <button class="add-layout-btn bg-purple-600 hover:bg-purple-500 text-white font-bold py-1 px-2 rounded-md text-sm transition-colors" data-layout="layout-screamsheet" title="Add Complex Grid">Screamsheet Grid</button>
         </div>
 
@@ -291,7 +333,6 @@
         </button>
     </div>
     
-    <!-- === LOGO LIBRARY MODAL === -->
     <div id="logo-library-modal" class="modal-overlay">
         <div class="modal-content p-4 h-[90vh]">
             <div class="flex justify-between items-center mb-4 border-b border-gray-600 pb-2">
@@ -317,7 +358,6 @@
         </div>
     </div>
 
-    <!-- === CATEGORIZE UPLOAD MODAL === -->
     <div id="categorize-modal" class="modal-overlay" style="z-index: 150;">
         <div class="bg-zinc-800 border border-zinc-600 p-6 rounded-lg shadow-2xl max-w-md w-full">
             <h3 class="text-xl font-bold text-white mb-4">Categorize Uploads</h3>
@@ -339,7 +379,6 @@
     
     <div id="document-container" class="relative"></div>
     
-    <!-- === TEMPLATES === -->
     <div id="article-template" class="article-block break-inside-avoid-column relative" style="display: none;">
         <button class="remove-btn text-red-500 hover:text-red-700" title="Remove Article"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M15 12H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></button>
         <h2 contenteditable="true" data-placeholder="New Article Headline">New Article Headline</h2>
@@ -352,7 +391,6 @@
         <div class="article-links mt-2" contenteditable="true" data-placeholder="Link: Example Link">Link: New Link</div>
     </div>
 
-    <!-- New Ad Template -->
     <div id="ad-template" class="ad-block break-inside-avoid-column relative" style="display: none;">
         <button class="remove-btn text-red-500 hover:text-red-700" title="Remove Ad"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M15 12H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></button>
         <div class="image-placeholder relative mb-2">
@@ -406,7 +444,6 @@
         </footer>
     </div>
     
-    <!-- Layout Templates -->
     <div id="layout-1-col-template" class="layout-block layout-1-col" style="display: none;">
         <button class="remove-layout-btn" title="Remove Block"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg></button>
         <div class="layout-block-content">
@@ -431,7 +468,6 @@
         </div>
     </div>
 
-    <!-- Screamsheet Grid Template -->
     <div id="layout-screamsheet-template" class="layout-block layout-screamsheet" style="display: none;">
         <button class="remove-layout-btn" title="Remove Block"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg></button>
         <div class="layout-block-content">
@@ -931,7 +967,7 @@
                     if (column) {
                         const newAd = adTemplate.cloneNode(true);
                         newAd.id = ''; newAd.style.display = 'block';
-                        column.insertBefore(newAd, target.closest('.add-article-btn'));
+                        column.insertBefore(newAd, target.closest('.add-ad-btn'));
                     }
                     return;
                 }
@@ -953,48 +989,8 @@
                 }
             });
 
-            // High-Fidelity PDF Export Logic using html2canvas & jsPDF
-            printBtn.addEventListener('click', async () => {
-                const originalText = printBtn.innerText;
-                printBtn.innerText = "Generating PDF...";
-                printBtn.disabled = true;
-
-                try {
-                    const { jsPDF } = window.jspdf;
-                    const pages = document.querySelectorAll('.screamsheet-page');
-                    const pdf = new jsPDF('p', 'mm', 'a4'); 
-
-                    for (let i = 0; i < pages.length; i++) {
-                        // Temporarily hide UI elements
-                        const removeBtns = pages[i].querySelectorAll('.remove-btn, .remove-layout-btn, .add-article-btn, .add-ad-btn, .remove-page-btn');
-                        removeBtns.forEach(btn => btn.style.display = 'none');
-                        pages[i].style.boxShadow = 'none'; // Remove red border outline for export
-
-                        const canvas = await html2canvas(pages[i], { 
-                            scale: 2, // High resolution
-                            useCORS: true,
-                            backgroundColor: getComputedStyle(pages[i]).backgroundColor
-                        });
-                        
-                        const imgData = canvas.toDataURL('image/jpeg', 1.0);
-                        if (i > 0) pdf.addPage();
-                        pdf.addImage(imgData, 'JPEG', 0, 0, 210, 297);
-
-                        // Restore UI elements
-                        removeBtns.forEach(btn => btn.style.display = '');
-                        pages[i].style.boxShadow = '';
-                    }
-
-                    pdf.save('NCT-Screamsheet.pdf');
-                } catch (error) {
-                    console.error("PDF Generation failed", error);
-                    alert("There was an error generating your PDF. Check the console for details.");
-                } finally {
-                    printBtn.innerText = originalText;
-                    printBtn.disabled = false;
-                    setActivePage(currentActivePage); // Restore the red highlight
-                }
-            });
+            // Trigger the native browser print dialog
+            printBtn.addEventListener('click', () => window.print());
 
             createPage(); 
         });
